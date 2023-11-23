@@ -30,17 +30,17 @@ def save_settings( setts ):
     except Exception as e:
         print(f"Error writing to the JSON file: {e}")
 
-def get_dev_package_name():
-    
+def get_dev_package_name( ):
+        
     setts = load_settings()
     
-    return setts["dev_package"][11:-4]
+    return setts["dev_package"]
 
-def get_dev_package_tar():
+def get_dev_package_tar( dev_pack ):
     
-    setts = load_settings()
-    
-    return uc_cache + setts["dev_package"]
+    ret = uc_cache + "devel_pack_" + dev_pack + ".tar"
+        
+    return ret
   
 
 def select_dev_package():
@@ -77,7 +77,7 @@ def select_dev_package():
         print(f"Error: {e}")
 
 
-    setts["dev_package"] = selected_file
+    setts["dev_package"] = selected_file[11:-4]
 
     save_settings( setts )
 
@@ -98,7 +98,7 @@ def get_dev_pack_list():
         
         dev_pack = tmp[11:-4]
         
-        print( dev_pack )
+        #print( dev_pack )
         build_list.append( dev_pack )
         
     return build_list

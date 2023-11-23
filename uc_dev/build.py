@@ -10,8 +10,29 @@ from uc_dev import options
 
 
 
-def print_line_text( text ):
-    print("\033[01;33m------------------------------  \033[01;32m " + text + " \033[01;33m ---------------------------------------\033[00m")
+def print_line_text( text , big=False, gcc=None, linux=None):
+    width  = 90
+    if big:
+        
+        line_color= "\033[38;5;75m"
+        
+        pre = "                 "
+        print(line_color + '┌' + '─' * width + '┐' + "\033[00m")
+        print(line_color +'│' + ' ' * width + '│' + "\033[00m")
+        print(line_color +'│' + pre +"\033[01;32m" + text + ' ' * ( width - len( pre ) - len( text ) ) + line_color + '│' + "\033[00m")
+        print(line_color +'│' + ' ' * width + '│' + " \033[00m")
+        
+        if gcc:
+            print(line_color +'│' + pre +"\033[01;33m" + gcc + ' ' * ( width - len( pre ) - len( gcc ) ) + line_color + '│' + "\033[00m")
+            
+        if linux:
+            print(line_color +'│' + pre +"\033[01;33m" + linux + ' ' * ( width - len( pre ) - len( linux ) ) + line_color + '│' + "\033[00m")
+        
+        print(line_color +'│' + ' ' * width + '│' + " \033[00m")
+        print(line_color + '└' + '─' * width + '┘' + "\033[00m")
+        
+        return
+    print("\033[01;33m" + '─' * 25 + " \033[01;32m " + text + " \033[01;33m " + '─' * ( width - 28 -len( text ) )  + "\033[00m")
 
 
 def touch( file_path ):
@@ -20,7 +41,10 @@ def touch( file_path ):
         pass
 
 def run_command( cmd ):
-    print( "run : " + cmd )
+    
+    line_color="\033[38;5;166m"
+    
+    print( line_color + "run : \033[00m \033[01;32m" + cmd + "\033[00m" )
     try:
         process = subprocess.Popen([ cmd ], shell=True)
         process.wait()
@@ -29,14 +53,17 @@ def run_command( cmd ):
         # Füge hier deinen eigenen Code hinzu, der beim Empfangen von Ctrl+C während des Wartens auf den Prozess ausgeführt werden soll
         sys.exit(0)
     
-def list_dev_file_content( ):
+def list_dev_file_content( dev_pack ):
 
     try:
-        with tarfile.open( options.get_dev_package_tar() , 'r') as tar:
+        dev_tar = options.get_dev_package_tar( dev_pack )
+        #print( dev_tar )
+        
+        with tarfile.open( dev_tar , 'r') as tar:
             # List the files in the TAR archive
             file_list = tar.getnames()
 
-            print("Files in the TAR archive {0}:".format( options.get_dev_package_tar() ))
+            print("Files in the TAR archive {0}:".format( dev_tar ))
             for file in file_list:
                 print(file)
             
@@ -48,9 +75,13 @@ def list_dev_file_content( ):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         
-def get_dev_file_content( name ):
+def get_dev_file_content( name, dev_pack ):
+    #print( dev_pack )
     try:
-        with tarfile.open( options.get_dev_package_tar() , 'r') as tar:
+        dev_tar = options.get_dev_package_tar( dev_pack )
+        #print( name )
+        #print( dev_tar )
+        with tarfile.open( dev_tar , 'r') as tar:
             # List the files in the TAR archive
             file_list = tar.getnames()
 
@@ -59,12 +90,12 @@ def get_dev_file_content( name ):
             #    print(file)
             
             
-            tar_name = "devel_pack_" + options.get_dev_package_name() + "/" + name
+            tar_name = "devel_pack_" + dev_pack + "/" + name
             
             return tar.extractfile(tar_name).read()
              
     except FileNotFoundError:
-        print("The file {0} was not found.".format( options.get_dev_package_tar() ))
+        print("The file {0} was not found.".format( options.get_dev_package_tar( dev_pack ) ))
     except tarfile.TarError as e:
         print(f"Error processing the TAR archive: {e}")
     except Exception as e:
@@ -72,21 +103,19 @@ def get_dev_file_content( name ):
     
     
 
-def get_dev_infos( ):
+def get_dev_infos( dev_pack ):
     
-    infos = get_dev_file_content( "infos.json" )
+    infos = get_dev_file_content( "infos.json" , dev_pack )
     
     json_info = json.loads( infos )
-    
-    pprint( json_info )
     
     return json_info
 
 
-def write_dev_pack_file( tar_name, out_name ):
+def write_dev_pack_file( tar_name, out_name, dev_pack ):
     
     #print( "get : " + tar_name )
-    data = get_dev_file_content( tar_name )
+    data = get_dev_file_content( tar_name, dev_pack )
     
     with open( out_name, "wb" ) as f:
         f.write( data )
@@ -96,7 +125,7 @@ def build_uclibc( uclibc_src, all_dev_packages ):
     
     
     if not all_dev_packages:
-        build_dev_pack_uclibc( uclibc_src )
+        build_dev_pack_uclibc( uclibc_src, options.get_dev_package_name() )
         return
 
 
@@ -109,24 +138,22 @@ def build_uclibc( uclibc_src, all_dev_packages ):
     
     
 
-def build_dev_pack_uclibc( uclibc_src, dev_pack=None ):
+def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     
-    if dev_pack == None:
-        dev_name = options.get_dev_package_name()
-    else:
-        dev_name = dev_pack
-        
     
-    print_line_text("building " + dev_name )
+    infos = get_dev_infos( dev_pack )
     
-    dev_path = "dev_" + dev_name + "/"
+    #pprint( infos )
+    #list_dev_file_content()    
+    
+    print_line_text("building " + dev_pack, big=True , gcc="GCC   : " + infos["GCC"], linux="Linux : " + infos["CONFIG_KERNEL_VERS"])
+    
+    dev_path = "dev_" + dev_pack + "/"
     if not os.path.exists( dev_path ):
         os.mkdir( dev_path )
         
     
-    infos = get_dev_infos()
     
-    list_dev_file_content()
     
     print_line_text("rsync uclibc-ng code" )
     cmd = "rsync --info=progress2 -a --exclude '.config' " +  uclibc_src + "/* " + dev_path+ "uclibc-ng/"
@@ -136,14 +163,14 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack=None ):
     
     if not os.path.exists( dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed" ):
         print_line_text("extract toolchain " + infos["CONFIG_TOOLCHAIN"] )
-        write_dev_pack_file( "files/" + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz" )
+        write_dev_pack_file( "files/" + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_pack=dev_pack )
         run_command("tar -xaf " + dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz -C " + dev_path )
         
         touch(dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed")
     
     if not os.path.exists( dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] +"/.installed" ):
         print_line_text("extract linux " + infos["CONFIG_KERNEL_VERS"] )
-        write_dev_pack_file( "files/linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz", dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz" )
+        write_dev_pack_file( "files/linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz", dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz", dev_pack=dev_pack )
         run_command("tar -xaf " + dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz -C " + dev_path )
         
         touch( dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] +"/.installed" )
@@ -154,6 +181,10 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack=None ):
     
     os.environ["CROSS_COMPILE"] = infos["CONFIG_GCC_PREFIX"]
     os.environ["ARCH"] = infos["CONFIG_KERNEL_ARCH"]
+    
+    os.environ["GCC_COLORS"] ='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+    os.environ["TERM"] = "xterm-256color"
+
     
     
     if not os.path.exists( dev_path + "sysroot" ):
@@ -171,15 +202,14 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack=None ):
     
     if not os.path.exists( dev_path+"uclibc-ng/.config" ):
         print_line_text("copy default uclibc-ng config" )
-        write_dev_pack_file( "files/uclibc-ng-config", dev_path+"uclibc-ng/.config" )
+        write_dev_pack_file( "files/uclibc-ng-config", dev_path+"uclibc-ng/.config", dev_pack )
         
         cmd = "sed -i 's|KERNEL_HEADERS=.*|KERNEL_HEADERS=\"" + os.getcwd() + "/" + dev_path + "/sysroot/usr/include\"|g' " + os.getcwd() + "/" + dev_path +  "uclibc-ng/.config"
         run_command( cmd )
         run_command( "make -C " + dev_path + "uclibc-ng oldconfig")
     
     
-    
-    run_command( "make -C " + dev_path + "uclibc-ng 2>&1 | tee -a " + dev_path + "build.log")
+    run_command( "make -C " + dev_path + "uclibc-ng ") #2>&1 | tee -a " + dev_path + "build.log")
     run_command( "make -C " + dev_path + "uclibc-ng install DESTDIR=" + os.getcwd() + "/" + dev_path + "/sysroot/" )
     
     
