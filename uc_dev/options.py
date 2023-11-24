@@ -49,6 +49,10 @@ def select_dev_package():
 
 
     #print( file_list )
+    
+    print("")
+    print("downloaded dev packages : ")
+    print("")
 
     for i, file_info in enumerate(file_list, start=1):
         
