@@ -118,6 +118,8 @@ def build_uclibc( uclibc_src, all_dev_packages ):
 
 def prepare_toolchain( dev_pack ):
     
+    infos = dev_package.get_dev_infos( dev_pack )
+    
     dev_path = "dev_" + dev_pack + "/"
     if not os.path.exists( dev_path ):
         os.mkdir( dev_path )
