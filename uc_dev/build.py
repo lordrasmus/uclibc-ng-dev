@@ -301,8 +301,9 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     
     if rebuild_rootfs:
         run_command("rm -rf rootfs" )
+        
     run_command("mkdir -p rootfs" )
-    
+    run_command("mkdir -p rootfs/lib/" )
     run_command("mkdir -p rootfs/usr/lib/" )
     run_command("( cd rootfs ; mkdir bin ; mkdir dev; mkdir etc; mkdir proc; mkdir sys; mkdir tmp )" )
     
