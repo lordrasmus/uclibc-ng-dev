@@ -217,7 +217,7 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     
     
     
-    ret = run_command( "make -C " + dev_path + "uclibc-ng V=1 ") #2>&1 | tee -a " + dev_path + "build.log")
+    ret = run_command( "make -C " + dev_path + "uclibc-ng  ") #2>&1 | tee -a " + dev_path + "build.log")
     if ret != 0:
         return
     ret = run_command( "make -C " + dev_path + "uclibc-ng install DESTDIR=" + os.getcwd() + "/" + dev_path + "/sysroot/" )
@@ -225,6 +225,7 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     touch( dev_path + "sysroot/.sysroot_installed" )
    
     
+    run_command("rm -rf " + dev_path + "/rootfs" )
         
 
 
@@ -307,12 +308,13 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     run_command("mkdir -p rootfs/usr/lib/" )
     run_command("( cd rootfs ; mkdir bin ; mkdir dev; mkdir etc; mkdir proc; mkdir sys; mkdir tmp )" )
     
-    run_command("cp "+ infos["CONFIG_TOOLCHAIN"] + "/sysroot/usr/lib/libatomic* sysroot/usr/lib")
-    run_command("cp "+ infos["CONFIG_TOOLCHAIN"] + "/sysroot/usr/lib/libgcc* sysroot/usr/lib")
+    run_command("cp -a "+ infos["CONFIG_TOOLCHAIN"] + "/sysroot/usr/lib/libatomic* sysroot/usr/lib")
+    run_command("cp -a "+ infos["CONFIG_TOOLCHAIN"] + "/sysroot/usr/lib/libgcc* sysroot/usr/lib")
 
     
     run_command("cp -av sysroot/lib/*.so*     rootfs/lib/")
     run_command("cp -av sysroot/usr/lib/*.so* rootfs/usr/lib/")
+    #run_command("cp -av sysroot/usr/lib/libgcc*.so* rootfs/usr/lib/")
 
     
     if not os.path.exists("uclibc-ng-test/.installed"):
@@ -519,11 +521,11 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     else:
         os.environ["SKIP_STRIP"]="0"
         
-    if not os.path.exists( "busybox-1.36.1/.build"):
+    if not os.path.exists( "rootfs/.busybox_build"):
         run_command("make -C busybox-1.36.1 oldconfig > /dev/null")
         if not run_command("make -C busybox-1.36.1 -j20 busybox") == 0:
             exit(1)
-        touch("busybox-1.36.1/.build")
+        touch("rootfs/.busybox_build")
     
     if not os.path.exists( "rootfs/.busybox_installed"):
         if not run_command("make -C busybox-1.36.1/ install  > /dev/null") == 0:
@@ -531,14 +533,22 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         touch("rootfs/.busybox_installed")
 
 
-    if rebuild_rootfs:
+    #if rebuild_rootfs:
+    if not os.path.exists( "rootfs/init"):
         run_command("( cd rootfs ; ln -s /sbin/init init )")
-        run_command("( cd rootfs ; ln -s lib lib32 )")
-        run_command("( cd rootfs ; ln -s lib lib64 )")
-        run_command("( cd rootfs ; ln -s lib libx32 )")
     
+    if not os.path.exists( "rootfs/lib32"):
+        run_command("( cd rootfs ; ln -s lib lib32 )")
+    if not os.path.exists( "rootfs/lib64"):
+        run_command("( cd rootfs ; ln -s lib lib64 )")
+    if not os.path.exists( "rootfs/libx32"):
+        run_command("( cd rootfs ; ln -s lib libx32 )")
+
+    if not os.path.exists( "rootfs/usr/lib32"):
         run_command("( cd rootfs/usr ; ln -s lib lib32 )")
+    if not os.path.exists( "rootfs/usr/lib64"):
         run_command("( cd rootfs/usr ; ln -s lib lib64 )")
+    if not os.path.exists( "rootfs/usr/libx32"):
         run_command("( cd rootfs/usr ; ln -s lib libx32 )")
     
     run_command("rm -f rootfs.img")
