@@ -328,7 +328,7 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         
         if not os.path.exists( "uclibc-ng/.config" ):
             print_line_text("copy default uclibc-ng config" )
-            run_command("mkdir -p uclibc-ng")
+            run_command("mkdir -p " + dev_path + "/uclibc-ng")
             dev_package.write_dev_pack_file( "files/uclibc-ng-config", dev_path+"uclibc-ng/.config", dev_pack )
         
         ret = subprocess.getstatusoutput('./uclibc-ng-test/get_disabled_tests.py uclibc-ng/.config')
