@@ -116,26 +116,41 @@ def build_uclibc( uclibc_src, all_dev_packages ):
         build_dev_pack_uclibc( uclibc_src , dev_pack )
 
 
-
-def prepare_uclibc( uclibc_src, dev_pack ):
-
-    infos = dev_package.get_dev_infos( dev_pack )
-
+def prepare_toolchain( dev_pack ):
+    
     dev_path = "dev_" + dev_pack + "/"
     if not os.path.exists( dev_path ):
         os.mkdir( dev_path )
-
-    print_line_text("rsync uclibc-ng code" )
-    cmd = "rsync --info=progress2 -a --exclude '.config' " +  uclibc_src + "/* " + dev_path+ "uclibc-ng/"
-    run_command( cmd )
-
-
+        
+    
     if not os.path.exists( dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed" ):
         print_line_text("extract toolchain " + infos["CONFIG_TOOLCHAIN"] )
         dev_package.write_dev_pack_file( "files/" + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_pack=dev_pack )
         run_command("tar -xaf " + dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz -C " + dev_path )
         
         touch(dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed")
+
+    os.environ["PATH"] += ":" + os.getcwd() + "/" + dev_path + infos["CONFIG_TOOLCHAIN"] + "/usr/bin"
+    #print( os.environ["PATH"] )
+    
+    os.environ["CROSS_COMPILE"] = infos["CONFIG_GCC_PREFIX"]
+    os.environ["ARCH"] = infos["CONFIG_KERNEL_ARCH"]
+    
+    os.environ["GCC_COLORS"] ='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+    os.environ["TERM"] = "xterm-256color"
+    
+    return dev_path
+
+def prepare_uclibc( uclibc_src, dev_pack ):
+
+    infos = dev_package.get_dev_infos( dev_pack )
+    
+    dev_path = prepare_toolchain( dev_pack )
+
+    print_line_text("rsync uclibc-ng code" )
+    cmd = "rsync --info=progress2 -a --exclude '.config' " +  uclibc_src + "/* " + dev_path+ "uclibc-ng/"
+    run_command( cmd )
+
     
     if not os.path.exists( dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] +"/.installed" ):
         print_line_text("extract linux " + infos["CONFIG_KERNEL_VERS"] )
@@ -145,14 +160,7 @@ def prepare_uclibc( uclibc_src, dev_pack ):
         touch( dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] +"/.installed" )
     
     
-    os.environ["PATH"] += ":" + os.getcwd() + "/" + dev_path + infos["CONFIG_TOOLCHAIN"] + "/usr/bin"
-    #print( os.environ["PATH"] )
     
-    os.environ["CROSS_COMPILE"] = infos["CONFIG_GCC_PREFIX"]
-    os.environ["ARCH"] = infos["CONFIG_KERNEL_ARCH"]
-    
-    os.environ["GCC_COLORS"] ='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
-    os.environ["TERM"] = "xterm-256color"
     
     if not os.path.exists( dev_path + "sysroot" ):
         os.mkdir( dev_path + "sysroot" )
@@ -265,15 +273,14 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     
     infos = dev_package.get_dev_infos( dev_pack )
     
+    dev_path = prepare_toolchain( dev_pack )
+    
     
     #pprint( infos )        
     
     print_line_text("building rootfs " + dev_pack, big=True , gcc="GCC   : " + infos["GCC"], linux="Linux : " + infos["CONFIG_KERNEL_VERS"])
     
-    dev_path = "dev_" + dev_pack + "/"
-    if not os.path.exists( dev_path ):
-        os.mkdir( dev_path )
-
+    
 
     os.environ["PATH"] += ":" + os.getcwd() + "/" + dev_path + infos["CONFIG_TOOLCHAIN"] + "/usr/bin"
 
