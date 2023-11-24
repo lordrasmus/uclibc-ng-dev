@@ -64,6 +64,12 @@ def dev_uc_main():
     if args.uclibc_src:
         options.set_uclibc_repo( args.uclibc_src )
         
+    if args.test_list:
+        if not args.build_rootfs:
+            print( "--test_list should be used with -r/--build_rootfs")
+        
+        
+        
     if args.config_uclibc:
         if options.get_uclibc_repo() == "":
             print("set uclibc-ng src with --uclibc_src")
