@@ -68,10 +68,6 @@ def run_qemu():
     if not os.path.exists( dev_path ):
         os.mkdir( dev_path )
     
-    dev_package.write_dev_pack_file("files/kernel.img", dev_path + "/kernel.img", dev_pack )        
-    if infos["CONFIG_KERNEL_ARCH"] == "kvx" or infos["CONFIG_KERNEL_ARCH"] == "xtensa":
-        kernel_cpio_hack( dev_path )
-    
     
     if not os.path.exists(dev_path + "rootfs.img"):
         dev_package.write_dev_pack_file("files/rootfs.img", dev_path + "/rootfs.img", dev_pack )        
@@ -79,6 +75,9 @@ def run_qemu():
     if not os.path.exists(dev_path + "rootfs.img.xz"):
         dev_package.write_dev_pack_file("files/rootfs.img.xz", dev_path + "/rootfs.img.xz", dev_pack )        
     
+    dev_package.write_dev_pack_file("files/kernel.img", dev_path + "/kernel.img", dev_pack )        
+    if infos["CONFIG_KERNEL_ARCH"] == "kvx" or infos["CONFIG_KERNEL_ARCH"] == "xtensa":
+        kernel_cpio_hack( dev_path )
 	
     
 	
