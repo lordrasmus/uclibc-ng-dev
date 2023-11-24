@@ -22,9 +22,7 @@ def load_settings():
             print(f"An unexpected error occurred: {e}")
             exit(1)
 
-    if not "dev_package" in setts or setts["dev_package"] == "":
-        print("no dev package selected. run uc_devel -s")
-        exit(1)
+    
 
     return setts
     
@@ -103,6 +101,10 @@ def get_dev_pack_list():
 def get_dev_package_name( ):
         
     setts = load_settings()
+    
+    if not "dev_package" in setts or setts["dev_package"] == "":
+        print("no dev package selected. run uc_devel -s")
+        exit(1)
     
     return setts["dev_package"]
 
