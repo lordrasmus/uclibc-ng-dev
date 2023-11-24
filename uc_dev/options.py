@@ -30,17 +30,7 @@ def save_settings( setts ):
     except Exception as e:
         print(f"Error writing to the JSON file: {e}")
 
-def get_dev_package_name( ):
-        
-    setts = load_settings()
-    
-    return setts["dev_package"]
 
-def get_dev_package_tar( dev_pack ):
-    
-    ret = uc_cache + "devel_pack_" + dev_pack + ".tar"
-        
-    return ret
   
 
 def select_dev_package():
@@ -102,3 +92,34 @@ def get_dev_pack_list():
         build_list.append( dev_pack )
         
     return build_list
+
+
+def get_dev_package_name( ):
+        
+    setts = load_settings()
+    
+    return setts["dev_package"]
+
+def get_dev_package_tar( dev_pack ):
+    
+    ret = uc_cache + "devel_pack_" + dev_pack + ".tar"
+        
+    return ret
+    
+
+def set_uclibc_repo( path ):
+    
+    setts = load_settings()
+    
+    setts["uclibc-ng_repo"] = os.path.abspath( path )
+    
+    save_settings( setts )
+
+def get_uclibc_repo( ):
+    
+    setts = load_settings()
+    
+    if "uclibc-ng_repo" in setts:
+        return setts["uclibc-ng_repo"]
+        
+    return ""

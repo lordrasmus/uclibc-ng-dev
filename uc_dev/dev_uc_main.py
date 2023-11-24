@@ -21,6 +21,7 @@ def dev_uc_main():
     
     parser.add_argument('-d', '--download',action='store_true', help='Download Dev Package')
     parser.add_argument('-s', '--select', action='store_true', help='select current dev package')
+    parser.add_argument('-c', '--config_uclibc', action='store_true', help='configure uclibc-ng')
     parser.add_argument('-b', '--build_uclibc', action='store_true', help='build uclibc-ng')
     parser.add_argument('-r', '--build_rootfs', action='store_true', help='build uclibc-ng')
     parser.add_argument('-q', '--run_qemu', action='store_true', help='run qemu')
@@ -60,15 +61,23 @@ def dev_uc_main():
     if args.select:
         options.select_dev_package()
 
+    if args.uclibc_src:
+        options.set_uclibc_repo( args.uclibc_src )
+        
+    if args.config_uclibc:
+        if options.get_uclibc_repo() == "":
+            print("set uclibc-ng src with --uclibc_src")
+            exit(1)
+            
+        build.config_uclibc( options.get_uclibc_repo(), args.all_archs )
 
     if args.build_uclibc:
         
-        if not args.uclibc_src:
-            print("Argument --uclibc_src is needed")
+        if options.get_uclibc_repo() == "":
+            print("set uclibc-ng src with --uclibc_src")
             exit(1)
         
-        
-        build.build_uclibc( args.uclibc_src, args.all_archs )
+        build.build_uclibc( options.get_uclibc_repo(), args.all_archs )
 
     
     if args.build_rootfs:

@@ -88,6 +88,19 @@ def run_command( cmd ):
     
     
 
+def config_uclibc( uclibc_src, all_dev_packages ):
+
+    if not all_dev_packages:
+        config_dev_pack_uclibc( uclibc_src, options.get_dev_package_name() )
+        return
+
+
+    dev_pack_list = options.get_dev_pack_list()
+   
+    for dev_pack in dev_pack_list:
+        config_dev_pack_uclibc( uclibc_src , dev_pack )
+
+
 
 def build_uclibc( uclibc_src, all_dev_packages ):
     
@@ -101,44 +114,32 @@ def build_uclibc( uclibc_src, all_dev_packages ):
    
     for dev_pack in dev_pack_list:
         build_dev_pack_uclibc( uclibc_src , dev_pack )
-        
-    
-    
-    
 
-def build_dev_pack_uclibc( uclibc_src, dev_pack ):
-    
-    
-    infos = get_dev_infos( dev_pack )
-    
-    #pprint( infos )
-    #list_dev_file_content()    
-    
-    print_line_text("building uclibc-ng " + dev_pack, big=True , gcc="GCC   : " + infos["GCC"], linux="Linux : " + infos["CONFIG_KERNEL_VERS"])
-    
+
+
+def prepare_uclibc( uclibc_src, dev_pack ):
+
+    infos = dev_package.get_dev_infos( dev_pack )
+
     dev_path = "dev_" + dev_pack + "/"
     if not os.path.exists( dev_path ):
         os.mkdir( dev_path )
-        
-    
-    
-    
+
     print_line_text("rsync uclibc-ng code" )
     cmd = "rsync --info=progress2 -a --exclude '.config' " +  uclibc_src + "/* " + dev_path+ "uclibc-ng/"
     run_command( cmd )
-    
-    
-    
+
+
     if not os.path.exists( dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed" ):
         print_line_text("extract toolchain " + infos["CONFIG_TOOLCHAIN"] )
-        write_dev_pack_file( "files/" + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_pack=dev_pack )
+        dev_package.write_dev_pack_file( "files/" + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_pack=dev_pack )
         run_command("tar -xaf " + dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz -C " + dev_path )
         
         touch(dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed")
     
     if not os.path.exists( dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] +"/.installed" ):
         print_line_text("extract linux " + infos["CONFIG_KERNEL_VERS"] )
-        write_dev_pack_file( "files/linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz", dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz", dev_pack=dev_pack )
+        dev_package.write_dev_pack_file( "files/linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz", dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz", dev_pack=dev_pack )
         run_command("tar -xaf " + dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz -C " + dev_path )
         
         touch( dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] +"/.installed" )
@@ -152,8 +153,6 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     
     os.environ["GCC_COLORS"] ='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
     os.environ["TERM"] = "xterm-256color"
-
-    
     
     if not os.path.exists( dev_path + "sysroot" ):
         os.mkdir( dev_path + "sysroot" )
@@ -170,14 +169,45 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     
     if not os.path.exists( dev_path+"uclibc-ng/.config" ):
         print_line_text("copy default uclibc-ng config" )
-        write_dev_pack_file( "files/uclibc-ng-config", dev_path+"uclibc-ng/.config", dev_pack )
+        dev_package.write_dev_pack_file( "files/uclibc-ng-config", dev_path+"uclibc-ng/.config", dev_pack )
         
         cmd = "sed -i 's|KERNEL_HEADERS=.*|KERNEL_HEADERS=\"" + os.getcwd() + "/" + dev_path + "/sysroot/usr/include\"|g' " + os.getcwd() + "/" + dev_path +  "uclibc-ng/.config"
         run_command( cmd )
         run_command( "make -C " + dev_path + "uclibc-ng oldconfig")
     
     
-    ret = run_command( "make -C " + dev_path + "uclibc-ng ") #2>&1 | tee -a " + dev_path + "build.log")
+    return dev_path
+    
+
+def config_dev_pack_uclibc( uclibc_src, dev_pack ):
+    
+    infos = dev_package.get_dev_infos( dev_pack )
+    
+    print_line_text("configure uclibc-ng " + dev_pack, big=True , gcc="GCC   : " + infos["GCC"], linux="Linux : " + infos["CONFIG_KERNEL_VERS"])
+    
+    
+    dev_path = prepare_uclibc( uclibc_src, dev_pack )
+    
+    
+    ret = run_command( "make -C " + dev_path + "uclibc-ng menuconfig")
+    
+    
+
+def build_dev_pack_uclibc( uclibc_src, dev_pack ):
+    
+    
+    infos = dev_package.get_dev_infos( dev_pack )
+    
+    #pprint( infos )
+    #list_dev_file_content()    
+    
+    print_line_text("building uclibc-ng " + dev_pack, big=True , gcc="GCC   : " + infos["GCC"], linux="Linux : " + infos["CONFIG_KERNEL_VERS"])
+    
+    dev_path = prepare_uclibc( uclibc_src, dev_pack )
+    
+    
+    
+    ret = run_command( "make -C " + dev_path + "uclibc-ng V=1 ") #2>&1 | tee -a " + dev_path + "build.log")
     if ret != 0:
         return
     ret = run_command( "make -C " + dev_path + "uclibc-ng install DESTDIR=" + os.getcwd() + "/" + dev_path + "/sysroot/" )
@@ -263,14 +293,17 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     if rebuild_rootfs:
         run_command("rm -rf rootfs" )
         run_command("mkdir rootfs" )
-        run_command("mkdir -p rootfs/usr/lib/" )
-        run_command("( cd rootfs ; mkdir bin ; mkdir dev; mkdir etc; mkdir proc; mkdir sys; mkdir tmp )" )
     
+    run_command("mkdir -p rootfs/usr/lib/" )
+    run_command("( cd rootfs ; mkdir bin ; mkdir dev; mkdir etc; mkdir proc; mkdir sys; mkdir tmp )" )
     
+    run_command("cp "+ infos["CONFIG_TOOLCHAIN"] + "/sysroot/usr/lib/libatomic* sysroot/usr/lib")
+    run_command("cp "+ infos["CONFIG_TOOLCHAIN"] + "/sysroot/usr/lib/libgcc* sysroot/usr/lib")
+
     
-        run_command("cp -r sysroot/lib/ rootfs/")
-        run_command("cp sysroot/usr/lib/*.so* rootfs/usr/lib/")
-	
+    run_command("cp -av sysroot/lib/*.so*     rootfs/lib/")
+    run_command("cp -av sysroot/usr/lib/*.so* rootfs/usr/lib/")
+
     
     if not os.path.exists("uclibc-ng-test/.installed"):
         print_line_text("clone uclibc-ng-test")
@@ -282,6 +315,7 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     
     test_disable = []
     if no_disabled_tests == False:
+        print_line_text("detecting tests to disable ")
         ret = subprocess.getstatusoutput('./uclibc-ng-test/get_disabled_tests.py uclibc-ng/.config')
         
         for s in ret[1].split(" "):
@@ -339,13 +373,6 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
 
         f.write("console::sysinit:/bin/run_tests.sh\n")
         #f.write("console::respawn:/bin/sh\n")
-        #f.write("console::respawn:/bin/sh\n")
-        #f.write("console::respawn:/sbin/getty  -n 0 console \n")
-        #f.write("console::respawn:/bin/login -f root tty1 </dev/tty1 >/dev/tty1 2>&1")
-        #f.write("console::respawn:/bin/login -f root ttyS0 </dev/ttyS0 >/dev/ttyS0 2>&1")
-        #f.write("console::respawn:/bin/login -f root console </dev/console >/dev/console 2>&1")
-        #f.write("console::respawn:/bin/login -f root console ")
-        #f.write("console::respawn:/sbin/getty -L console 0 xterm-256color\n")
         f.write("console::respawn:/sbin/getty -n -L -t 360 console 0 xterm-256color\n")
 
         """
@@ -422,7 +449,7 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         f.write("echo ''\n")
         f.write("echo 'run reboot or shutdown to quit qemu'\n")
         f.write("echo ''\n")
-        f.write("echo 'login -> root , no passwword'\n")
+        f.write("echo 'login -> root , no password'\n")
         f.write("echo ''\n")
     run_command("chmod 777 rootfs/bin/run_tests.sh")
 
@@ -478,11 +505,13 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         
     if not os.path.exists( "busybox-1.36.1/.build"):
         run_command("make -C busybox-1.36.1 oldconfig > /dev/null")
-        run_command("make -C busybox-1.36.1 -j20 busybox")
+        if not run_command("make -C busybox-1.36.1 -j20 busybox") == 0:
+            exit(1)
         touch("busybox-1.36.1/.build")
     
     if not os.path.exists( "rootfs/.busybox_installed"):
-        run_command("make -C busybox-1.36.1/ install  > /dev/null")
+        if not run_command("make -C busybox-1.36.1/ install  > /dev/null") == 0:
+            exit(1)
         touch("rootfs/.busybox_installed")
 
 
@@ -500,7 +529,7 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     run_command("( cd rootfs ; find . | sort | cpio -o -H newc ) > rootfs.img")
     #run_command("cp rootfs.img rootfs.cpio")
     run_command("rm -f rootfs.img.xz")
-    run_command("xz -k --check=crc32 rootfs.img")
+    run_command("xz -v -k --check=crc32 rootfs.img")
     
     for t in test_disable:
         os.environ[t] = "0"
