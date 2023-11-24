@@ -8,6 +8,7 @@ def dev_uc_main():
     from uc_dev import dev_package
     from uc_dev import options
     from uc_dev import build
+    from uc_dev import qemu
     
     
     uc_dev = os.path.expanduser('~')+"/.uc_dev/repo"
@@ -17,16 +18,18 @@ def dev_uc_main():
 
     parser.add_argument('-u', '--update',action='store_true', help='Update dev tool')
 
-    # Füge Optionale Argumente hinzu
+    
     parser.add_argument('-d', '--download',action='store_true', help='Download Dev Package')
-    
     parser.add_argument('-s', '--select', action='store_true', help='select current dev package')
-    
     parser.add_argument('-b', '--build_uclibc', action='store_true', help='build uclibc-ng')
+    parser.add_argument('-r', '--build_rootfs', action='store_true', help='build uclibc-ng')
+    parser.add_argument('-q', '--run_qemu', action='store_true', help='run qemu')
+    
+    parser.add_argument('-a', '--all_archs', action='store_true', help='build for all downloaded archs')
     
     
-    parser.add_argument('-a', '--all', action='store_true', help='build for all downloaded archs')
-    
+    parser.add_argument( '--all_tests', action='store_true',  help='do not auto disable tests')
+    parser.add_argument( '--test_list',  help='A comma-separated list of tests')
     
     parser.add_argument( '--uclibc_src',  help='path to uclibc')
     
@@ -65,5 +68,13 @@ def dev_uc_main():
             exit(1)
         
         
-        build.build_uclibc( args.uclibc_src, args.all )
-        
+        build.build_uclibc( args.uclibc_src, args.all_archs )
+
+    
+    if args.build_rootfs:
+        build.build_rootfs( args.all_archs, args.test_list, no_disabled_tests=args.all_tests )
+
+    if args.run_qemu:
+        qemu.run_qemu()
+
+

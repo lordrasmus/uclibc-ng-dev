@@ -3,6 +3,7 @@ import os
 import re
 import json
 import requests
+import tarfile
 
 try:
     from tqdm import tqdm
@@ -18,6 +19,7 @@ from html.parser import HTMLParser
 from datetime import datetime
 
 
+from uc_dev import options
 
 def get_file_list_with_timestamp(url):
     
@@ -107,3 +109,73 @@ def download_dev_package():
         print("Invalid selection. Please enter a number between 1 and {0}.".format(len(file_list)))
     except Exception as e:
         print(f"Error while downloading the file: {e}")
+
+
+
+
+def list_dev_file_content( dev_pack ):
+
+    try:
+        dev_tar = options.get_dev_package_tar( dev_pack )
+        #print( dev_tar )
+        
+        with tarfile.open( dev_tar , 'r') as tar:
+            # List the files in the TAR archive
+            file_list = tar.getnames()
+
+            print("Files in the TAR archive {0}:".format( dev_tar ))
+            for file in file_list:
+                print(file)
+            
+             
+    except FileNotFoundError:
+        print("The file {0} was not found.".format( options.get_dev_package_tar() ))
+    except tarfile.TarError as e:
+        print(f"Error processing the TAR archive: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        
+def get_dev_file_content( name, dev_pack ):
+    #print( dev_pack )
+    try:
+        dev_tar = options.get_dev_package_tar( dev_pack )
+        #print( name )
+        #print( dev_tar )
+        with tarfile.open( dev_tar , 'r') as tar:
+            # List the files in the TAR archive
+            file_list = tar.getnames()
+
+            #print("Files in the TAR archive {0}:".format( options.get_dev_package_tar() ))
+            #for file in file_list:
+            #    print(file)
+            
+            
+            tar_name = "devel_pack_" + dev_pack + "/" + name
+            
+            return tar.extractfile(tar_name).read()
+             
+    except FileNotFoundError:
+        print("The file {0} was not found.".format( options.get_dev_package_tar( dev_pack ) ))
+    except tarfile.TarError as e:
+        print(f"Error processing the TAR archive: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+    
+    
+
+def get_dev_infos( dev_pack ):
+    
+    infos = get_dev_file_content( "infos.json" , dev_pack )
+    
+    json_info = json.loads( infos )
+    
+    return json_info
+
+
+def write_dev_pack_file( tar_name, out_name, dev_pack ):
+    
+    #print( "get : " + tar_name )
+    data = get_dev_file_content( tar_name, dev_pack )
+    
+    with open( out_name, "wb" ) as f:
+        f.write( data )
