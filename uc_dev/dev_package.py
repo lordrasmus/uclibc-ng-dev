@@ -61,8 +61,8 @@ def download_dev_package():
 
     uc_download = options.get_download_dir()
         
-    if not os.path.exists( uc_cache ):
-        os.makedirs( uc_cache )
+    if not os.path.exists( uc_download ):
+        os.makedirs( uc_download )
             
     url="https://uclibc-ng.tangotanzen.de/index.php?op=listdev_packages"
     
@@ -76,10 +76,10 @@ def download_dev_package():
         #timestamp_str = datetime.utcfromtimestamp(file_info['timestamp']).strftime('%Y-%m-%d %H:%M:%S UTC')
         #print("{0:2d}) {1}".format( i, file_info['filename'].replace("devel_pack_","").replace(".tar","") ) )
         status = ""
-        if os.path.exists( uc_cache + file_info['filename'] ):
+        if os.path.exists( uc_download + file_info['filename'] ):
             status = "\033[01;32mdownloaded\033[00m"
             
-            timestamp = os.path.getmtime( uc_cache + file_info['filename'] )
+            timestamp = os.path.getmtime( uc_download + file_info['filename'] )
             if not timestamp == file_info['timestamp']:
                 status = "\033[01;33mupdate avaible\033[00m"
             
@@ -117,8 +117,8 @@ def download_dev_package():
         
         for selected_file in selected_files:
             
-            if os.path.exists( uc_cache + selected_file['filename'] ):
-                timestamp = os.path.getmtime( uc_cache + selected_file['filename'] )
+            if os.path.exists( uc_download + selected_file['filename'] ):
+                timestamp = os.path.getmtime( uc_download + selected_file['filename'] )
             
                 if timestamp == selected_file['timestamp']:
                     print(selected_file['filename'] + " already downloaded and up to date")
@@ -126,9 +126,9 @@ def download_dev_package():
         
             file_url = 'https://uclibc-ng.tangotanzen.de/uploads/' + selected_file['filename']
             
-            download_with_progress(file_url, uc_cache + selected_file['filename'])
+            download_with_progress(file_url, uc_download + selected_file['filename'])
             
-            os.utime(  uc_cache + selected_file['filename'], ( selected_file['timestamp'], selected_file['timestamp'] ) )
+            os.utime(  uc_download + selected_file['filename'], ( selected_file['timestamp'], selected_file['timestamp'] ) )
 
         
     except (ValueError, IndexError):
