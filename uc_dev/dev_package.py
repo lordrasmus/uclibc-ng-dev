@@ -59,7 +59,7 @@ def download_dev_package():
     
     #print("download")
 
-    uc_download = options.options.get_download_dir()
+    uc_download = options.get_download_dir()
         
     if not os.path.exists( uc_cache ):
         os.makedirs( uc_cache )
