@@ -54,13 +54,13 @@ def run_qemu():
     
     #pprint( infos )        
     
-    if not os.path.exists( os.path.expanduser('~')+"/.uc_dev/qemu-inst.tar.xz"):
+    if not os.path.exists( options.get_download_dir() + "/qemu-inst.tar.xz"):
         build.print_line_text("download qemu")
-        dev_package.download_with_progress("https://raw.githubusercontent.com/lordrasmus/uclibc-ng-qemu-imgs/main/qemu-inst.tar.xz", os.path.expanduser('~')+"/.uc_dev/qemu-inst.tar.xz")
+        dev_package.download_with_progress("https://raw.githubusercontent.com/lordrasmus/uclibc-ng-qemu-imgs/main/qemu-inst.tar.xz", options.get_download_dir() + "/qemu-inst.tar.xz")
         
     if not os.path.exists( "qemu-inst/.installed"):
         build.print_line_text("extract qemu")
-        build.run_command("tar -xaf " + os.path.expanduser('~')+"/.uc_dev/qemu-inst.tar.xz")
+        build.run_command("tar -xaf " + options.get_download_dir() + "/qemu-inst.tar.xz")
         build.touch("qemu-inst/.installed")
 
 

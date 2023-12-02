@@ -32,6 +32,8 @@ def dev_uc_main():
     parser.add_argument( '--all_tests', action='store_true',  help='do not auto disable tests')
     parser.add_argument( '--test_list',  help='A comma-separated list of tests')
     
+    
+    parser.add_argument( '-w', '--work_dir',  help='path where builds are done and files are cached')
     parser.add_argument( '--uclibc_src',  help='path to uclibc')
     
     
@@ -63,6 +65,11 @@ def dev_uc_main():
 
     if args.uclibc_src:
         options.set_uclibc_repo( args.uclibc_src )
+    
+    if args.work_dir:
+        options.set_options("work_dir", args.work_dir )
+    
+    options.check_settings()
         
     if args.test_list:
         if not args.build_rootfs:

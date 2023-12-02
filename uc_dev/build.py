@@ -472,13 +472,13 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     run_command("chmod 777 rootfs/bin/run_tests.sh")
 
 
-    if not os.path.exists( os.path.expanduser('~')+"/.uc_dev/busybox-1.36.1.tar.bz2" ):
+    if not os.path.exists( options.get_download_dir() + "/busybox-1.36.1.tar.bz2" ):
         print_line_text("download busybox")
-        dev_package.download_with_progress("https://raw.githubusercontent.com/lordrasmus/toolchains/main/busybox-1.36.1.tar.bz2", os.path.expanduser('~')+"/.uc_dev/busybox-1.36.1.tar.bz2")
+        dev_package.download_with_progress("https://raw.githubusercontent.com/lordrasmus/toolchains/main/busybox-1.36.1.tar.bz2", options.get_download_dir() + "/busybox-1.36.1.tar.bz2")
 
     if not os.path.exists("busybox-1.36.1/installed"):
         print_line_text("extract busybox")
-        run_command("tar -xaf " + os.path.expanduser('~')+"/.uc_dev/busybox-1.36.1.tar.bz2")
+        run_command("tar -xaf " + options.get_download_dir() + "/busybox-1.36.1.tar.bz2")
         touch("busybox-1.36.1/installed")
 
 

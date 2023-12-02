@@ -28,7 +28,6 @@ def get_file_list_with_timestamp(url):
         response = urllib.request.urlopen(url)
         html_content = response.read().decode('utf-8')
 
-        #print( html_content )
         file_list_with_timestamp = json.loads(html_content)
         
 
@@ -60,10 +59,10 @@ def download_dev_package():
     
     #print("download")
 
-    uc_cache = os.path.expanduser('~')+"/.uc_dev/downloads/"
+    uc_download = options.options.get_download_dir()
         
     if not os.path.exists( uc_cache ):
-        os.mkdir( uc_cache )
+        os.makedirs( uc_cache )
             
     url="https://uclibc-ng.tangotanzen.de/index.php?op=listdev_packages"
     
@@ -87,26 +86,54 @@ def download_dev_package():
             
             #exit(1)
         
-        print("{0:2d}) {1:<30} {2}".format( i, file_info['filename'][11:-4], status ) )
+        file_display = file_info['filename'][11:-4]
+        tmp = file_display.split("-")
+        tmp[0] = "\033[01;33m" + tmp[0] + "\033[00m"
+        file_display = "-".join(tmp)
+        
+        size = file_info['size'] / 1024 / 1024
+        size = "{0:.1f}".format(size).rjust(6)
+        
+        
+        print("{0:2d}) {1:<70} {2}  MB  {3}".format( i, file_display , size, status ) )
 
+
+    del file_info
+    
     # Benutzer nach Auswahl fragen
     try:
-        selection = int(input("\nPlease choose a file (1-{0}): ".format(len(file_list))))
-        selected_file = file_list[selection - 1]
+        selection = input("\nPlease choose a file (1-{0}) or a == all: ".format(len(file_list)))
         
-        file_url = 'https://uclibc-ng.tangotanzen.de/uploads/' + selected_file['filename']
-
+        selected_files = []
         
-        print("\nYou have selected \033[01;32m {0}\033[00m. The file is being downloaded...".format(selected_file['filename'][11:-4]))
-
-        # Hier kannst du die Datei herunterladen (z.B., mit urllib)
-        download_with_progress(file_url, uc_cache + selected_file['filename'])
+        if selection == "a":
+            selected_files = file_list
+        else:
+            selected_file = file_list[ int(selection) - 1]
+            
+            print("\nYou have selected \033[01;32m {0}\033[00m. The file is being downloaded...".format(selected_file['filename'][11:-4]))    
+            selected_files.append( selected_file )
+            
         
-        os.utime(  uc_cache + selected_file['filename'], ( selected_file['timestamp'], selected_file['timestamp'] ) )
+        for selected_file in selected_files:
+            
+            if os.path.exists( uc_cache + selected_file['filename'] ):
+                timestamp = os.path.getmtime( uc_cache + selected_file['filename'] )
+            
+                if timestamp == selected_file['timestamp']:
+                    print(selected_file['filename'] + " already downloaded and up to date")
+                    continue
+        
+            file_url = 'https://uclibc-ng.tangotanzen.de/uploads/' + selected_file['filename']
+            
+            download_with_progress(file_url, uc_cache + selected_file['filename'])
+            
+            os.utime(  uc_cache + selected_file['filename'], ( selected_file['timestamp'], selected_file['timestamp'] ) )
 
         
     except (ValueError, IndexError):
         print("Invalid selection. Please enter a number between 1 and {0}.".format(len(file_list)))
+        
     except Exception as e:
         print(f"Error while downloading the file: {e}")
 

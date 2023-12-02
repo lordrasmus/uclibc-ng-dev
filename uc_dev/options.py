@@ -3,7 +3,6 @@ import os
 import json
 
 uc_setts = os.path.expanduser('~')+"/.uc_dev/settings.json"
-uc_cache = os.path.expanduser('~')+"/.uc_dev/downloads/"
 
 def load_settings():
     if not os.path.exists( uc_setts ):
@@ -35,7 +34,44 @@ def save_settings( setts ):
         print(f"Error writing to the JSON file: {e}")
 
 
-  
+def check_settings( ):
+    setts = load_settings()
+    
+    error = False
+    
+    if not "work_dir" in setts:
+        print("Work dir not set. run uc_devel --work_dir")
+        error = True
+        
+    
+    if error:
+        exit(1)
+
+
+def set_options ( name, value ):
+    
+    
+    setts = load_settings()
+    
+    setts[name] = value
+    
+    save_settings( setts )
+    
+def get_option( name ):
+    
+    setts = load_settings()
+    
+    return setts[name]
+    
+
+def get_cache_dir():
+    
+    return get_option( "work_dir" )+ "/cache/"
+    
+def get_download_dir():
+    
+    return get_option( "work_dir" )+ "/cache/downloads/"    
+    
 
 def select_dev_package():
     
