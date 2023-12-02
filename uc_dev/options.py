@@ -71,6 +71,10 @@ def get_cache_dir():
 def get_download_dir():
     
     return get_option( "work_dir" )+ "/cache/downloads/"    
+
+def get_dev_pack_dir():
+    
+    return get_option( "work_dir" )+ "/cache/dev_packs/"    
     
 
 def select_dev_package():
@@ -78,10 +82,10 @@ def select_dev_package():
     
     setts = load_settings()
     
-    files = os.listdir(uc_cache)
+    files = sorted( os.listdir(get_dev_pack_dir()) )
 
     # Filtere nur Dateien (keine Verzeichnisse) und zeige den vollen Pfad an
-    file_list = [file for file in files if os.path.isfile(os.path.join(uc_cache, file)) and not file.endswith(".dl") ]
+    file_list = [file for file in files if os.path.isfile(os.path.join(get_dev_pack_dir(), file)) and not file.endswith(".dl") ]
 
 
     #print( file_list )
@@ -96,7 +100,12 @@ def select_dev_package():
         if setts["dev_package"] == file_info:
             selected="\033[01;32mselected\033[00m"
         
-        print("{0:2d}) {1:<30} {2} ".format( i, file_info[11:-4], selected ) )
+        file_display = file_info[11:-4]
+        tmp = file_display.split("-")
+        tmp[0] = "\033[01;33m" + tmp[0] + "\033[00m"
+        file_display = "-".join(tmp)
+        
+        print("{0:2d}) {1:<30} {2} ".format( i, file_display, selected ) )
 
     # Benutzer nach Auswahl fragen
     try:
@@ -119,10 +128,10 @@ def get_dev_pack_list():
     
      #setts = load_settings()
     
-    files = os.listdir(uc_cache)
+    files = os.listdir(get_dev_pack_dir())
 
     # Filtere nur Dateien (keine Verzeichnisse) und zeige den vollen Pfad an
-    file_list = [file for file in files if os.path.isfile(os.path.join(uc_cache, file)) and not file.endswith(".dl") ]
+    file_list = [file for file in files if os.path.isfile(os.path.join(get_dev_pack_dir(), file)) and not file.endswith(".dl") ]
 
     file_list = sorted( file_list )
     
@@ -150,7 +159,7 @@ def get_dev_package_name( ):
 
 def get_dev_package_tar( dev_pack ):
     
-    ret = uc_cache + "devel_pack_" + dev_pack + ".tar"
+    ret = get_dev_pack_dir() + "devel_pack_" + dev_pack + ".tar"
         
     return ret
     
