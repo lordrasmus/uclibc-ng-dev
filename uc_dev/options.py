@@ -64,6 +64,9 @@ def get_option( name ):
     return setts[name]
     
 
+def get_work_dir():
+    return get_option( "work_dir" ) + "/"
+    
 def get_cache_dir():
     
     return get_option( "work_dir" )+ "/cache/"

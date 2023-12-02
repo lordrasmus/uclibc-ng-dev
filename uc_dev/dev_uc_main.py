@@ -17,24 +17,25 @@ def dev_uc_main():
     parser = argparse.ArgumentParser(description='uclibc-ng dev tool')
 
     parser.add_argument('-u', '--update',action='store_true', help='Update dev tool')
-
-    
     parser.add_argument('-d', '--download',action='store_true', help='Download Dev Package')
     parser.add_argument('-s', '--select', action='store_true', help='select current dev package')
+    parser.add_argument('--clean', action='store_true', help='delete all dev folders in workspace')
+    
+    parser.add_argument('-a', '--all_archs', action='store_true', help='build for all downloaded archs')
+    parser.add_argument( '-w', '--work_dir',  help='path where builds are done and files are cached')
+    parser.add_argument( '--uclibc_src',  help='path to uclibc')
+    
+    
     parser.add_argument('-c', '--config_uclibc', action='store_true', help='configure uclibc-ng')
     parser.add_argument('-b', '--build_uclibc', action='store_true', help='build uclibc-ng')
     parser.add_argument('-r', '--build_rootfs', action='store_true', help='build uclibc-ng')
+    
     parser.add_argument('-q', '--run_qemu', action='store_true', help='run qemu')
-    
-    parser.add_argument('-a', '--all_archs', action='store_true', help='build for all downloaded archs')
-    
-    
     parser.add_argument( '--all_tests', action='store_true',  help='do not auto disable tests')
     parser.add_argument( '--test_list',  help='A comma-separated list of tests')
     
     
-    parser.add_argument( '-w', '--work_dir',  help='path where builds are done and files are cached')
-    parser.add_argument( '--uclibc_src',  help='path to uclibc')
+    
     
     
     # Füge Positional Argumente hinzu
@@ -67,9 +68,23 @@ def dev_uc_main():
         options.set_uclibc_repo( args.uclibc_src )
     
     if args.work_dir:
-        options.set_options("work_dir", args.work_dir )
+        options.set_options("work_dir", os.path.abspath( args.work_dir ) )
     
     options.check_settings()
+    
+    if args.clean:
+        cmd = "rm -rf " + options.get_work_dir()+ "dev_*"
+        print( "\nrunning : " + cmd )
+        
+        user_input = input("\nDo you want to continue? (yes/no): ")
+
+        # Check the user's input
+        if user_input.lower() == "yes" or user_input.lower() == "y":
+            print("deleting")
+            os.system( cmd )
+        
+        exit(0)
+    
         
     if args.test_list:
         if not args.build_rootfs:

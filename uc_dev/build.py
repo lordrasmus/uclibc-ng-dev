@@ -120,7 +120,7 @@ def prepare_toolchain( dev_pack ):
     
     infos = dev_package.get_dev_infos( dev_pack )
     
-    dev_path = "dev_" + dev_pack + "/"
+    dev_path = options.get_work_dir() + "dev_" + dev_pack + "/"
     if not os.path.exists( dev_path ):
         os.mkdir( dev_path )
         
@@ -132,7 +132,7 @@ def prepare_toolchain( dev_pack ):
         
         touch(dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed")
 
-    os.environ["PATH"] += ":" + os.getcwd() + "/" + dev_path + infos["CONFIG_TOOLCHAIN"] + "/usr/bin"
+    os.environ["PATH"] += ":" + dev_path + infos["CONFIG_TOOLCHAIN"] + "/usr/bin"
     #print( os.environ["PATH"] )
     
     os.environ["CROSS_COMPILE"] = infos["CONFIG_GCC_PREFIX"]
@@ -171,7 +171,7 @@ def prepare_uclibc( uclibc_src, dev_pack ):
     
     if not os.path.exists( dev_path + "sysroot/.kernel_header_installed"):
         print_line_text( "install kernel_header" )
-        cmd = "make -C " + dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + "/ INSTALL_HDR_PATH=" + os.getcwd() + "/" + dev_path + "/sysroot/usr/ headers_install 2>&1 | tee -a build.log"
+        cmd = "make -C " + dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + "/ INSTALL_HDR_PATH=" + dev_path + "/sysroot/usr/ headers_install 2>&1 | tee -a build.log"
         run_command( cmd )
         
         touch( dev_path + "sysroot/.kernel_header_installed" )
@@ -181,7 +181,7 @@ def prepare_uclibc( uclibc_src, dev_pack ):
         print_line_text("copy default uclibc-ng config" )
         dev_package.write_dev_pack_file( "files/uclibc-ng-config", dev_path+"uclibc-ng/.config", dev_pack )
         
-        cmd = "sed -i 's|KERNEL_HEADERS=.*|KERNEL_HEADERS=\"" + os.getcwd() + "/" + dev_path + "/sysroot/usr/include\"|g' " + os.getcwd() + "/" + dev_path +  "uclibc-ng/.config"
+        cmd = "sed -i 's|KERNEL_HEADERS=.*|KERNEL_HEADERS=\"" + dev_path + "/sysroot/usr/include\"|g' " + dev_path +  "uclibc-ng/.config"
         run_command( cmd )
         run_command( "make -C " + dev_path + "uclibc-ng oldconfig")
     
