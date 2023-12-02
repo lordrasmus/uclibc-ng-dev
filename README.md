@@ -8,7 +8,10 @@ Make it executable using chmod, and run uc_devel -h to view the available option
 While it's still a work in progress, it is already functional. 
 There is an option to update it using -u or --update.
 
-All files are stored in ~/.uc_dev/. The builds are performed in the current working directory within a separate folder for each development package.
+
+
+All files are stored in in a working directory which can be set using uc_devel --work_dir. 
+The builds are performed in working directory within a separate folder for each development package.
 
 The primary focus is on building uclibc-ng, a rootfs with the testsuite and busybox, and running it on QEMU.
 
