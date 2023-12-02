@@ -76,7 +76,7 @@ def run_qemu():
         dev_package.write_dev_pack_file("files/rootfs.img.xz", dev_path + "/rootfs.img.xz", dev_pack )        
     
     dev_package.write_dev_pack_file("files/kernel.img", dev_path + "/kernel.img", dev_pack )        
-    if infos["CONFIG_KERNEL_ARCH"] == "kvx" or infos["CONFIG_KERNEL_ARCH"] == "xtensa":
+    if infos["CONFIG_KERNEL_ARCH"] == "kvx" or infos["CONFIG_KERNEL_ARCH"] == "xtensa" or infos["CONFIG_KERNEL_ARCH"] == "csky":
         kernel_cpio_hack( dev_path )
 	
     
