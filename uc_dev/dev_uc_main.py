@@ -17,8 +17,12 @@ def dev_uc_main():
     parser = argparse.ArgumentParser(description='uclibc-ng dev tool')
 
     parser.add_argument('-u', '--update',action='store_true', help='Update dev tool')
-    parser.add_argument('-d', '--download',action='store_true', help='Download Dev Package')
-    parser.add_argument('-s', '--select', action='store_true', help='select current dev package')
+    parser.add_argument('-d', '--download', nargs='?', const=True, default=False,
+                        help='Download Dev Package. Bare -d is interactive; '
+                             '-d NAME (substring) or -d all downloads non-interactively')
+    parser.add_argument('-s', '--select', nargs='?', const=True, default=False,
+                        help='Select current dev package. Bare -s is interactive; '
+                             '-s NAME selects by (substring) match non-interactively')
     parser.add_argument('--clean', action='store_true', help='delete all dev folders in workspace')
     
     parser.add_argument('-a', '--all_archs', action='store_true', help='build for all downloaded archs')
@@ -57,12 +61,12 @@ def dev_uc_main():
 
     if args.download:
 
-        dev_package.download_dev_package()
+        dev_package.download_dev_package( None if args.download is True else args.download )
         exit(0)
-        
+
 
     if args.select:
-        options.select_dev_package()
+        options.select_dev_package( None if args.select is True else args.select )
 
     if args.uclibc_src:
         options.set_uclibc_repo( args.uclibc_src )

@@ -55,8 +55,8 @@ def download_with_progress(url, destination):
         t.total = t.n
     os.rename( destination_tmp, destination )
         
-def download_dev_package():
-    
+def download_dev_package( sel=None ):
+
     #print("download")
 
     uc_download = options.get_dev_pack_dir()
@@ -100,20 +100,29 @@ def download_dev_package():
 
     del file_info
     
-    # Benutzer nach Auswahl fragen
+    # Auswahl: non-interaktiv via sel (NAME-Substring / Index / "all"), sonst interaktiv
     try:
-        selection = input("\nPlease choose a file (1-{0}) or a == all: ".format(len(file_list)))
-        
-        selected_files = []
-        
-        if selection == "a":
-            selected_files = file_list
+        if sel is None:
+            selection = input("\nPlease choose a file (1-{0}) or a == all: ".format(len(file_list)))
         else:
-            selected_file = file_list[ int(selection) - 1]
-            
-            print("\nYou have selected \033[01;32m {0}\033[00m. The file is being downloaded...".format(selected_file['filename'][11:-4]))    
-            selected_files.append( selected_file )
-            
+            selection = str( sel )
+
+        selected_files = []
+
+        if selection in ("a", "all"):
+            selected_files = list( file_list )
+        elif selection.isdigit():
+            selected_files.append( file_list[ int(selection) - 1] )
+        else:
+            # Substring-Match auf dem Paketnamen (z.B. "alpha", "i686")
+            selected_files = [ f for f in file_list if selection in f['filename'] ]
+            if not selected_files:
+                print("no dev package matches '{0}'".format(selection))
+                return
+
+        for sf in selected_files:
+            print("\nselected \033[01;32m{0}\033[00m. downloading...".format(sf['filename'][11:-4]))
+
         
         for selected_file in selected_files:
             

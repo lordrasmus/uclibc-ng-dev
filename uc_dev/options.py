@@ -80,19 +80,30 @@ def get_dev_pack_dir():
     return get_option( "work_dir" )+ "/cache/dev_packs/"    
     
 
-def select_dev_package():
-    
-    
+def select_dev_package( name=None ):
+
+
     setts = load_settings()
-    
+
     files = sorted( os.listdir(get_dev_pack_dir()) )
 
     # Filtere nur Dateien (keine Verzeichnisse) und zeige den vollen Pfad an
     file_list = [file for file in files if os.path.isfile(os.path.join(get_dev_pack_dir(), file)) and not file.endswith(".dl") ]
 
+    # non-interaktiv: per (eindeutigem) NAME-Substring waehlen
+    if name is not None:
+        matches = [ f for f in file_list if name in f[11:-4] ]
+        if len( matches ) != 1:
+            print("select '{0}' matched {1} packages: {2}".format(
+                name, len(matches), [ m[11:-4] for m in matches ] ) )
+            exit(1)
+        setts["dev_package"] = matches[0][11:-4]
+        save_settings( setts )
+        print("selected \033[01;32m{0}\033[00m".format( matches[0][11:-4] ) )
+        return
 
     #print( file_list )
-    
+
     print("")
     print("downloaded dev packages : ")
     print("")

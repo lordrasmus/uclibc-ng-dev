@@ -183,7 +183,9 @@ def prepare_uclibc( uclibc_src, dev_pack ):
         
         cmd = "sed -i 's|KERNEL_HEADERS=.*|KERNEL_HEADERS=\"" + dev_path + "/sysroot/usr/include\"|g' " + dev_path +  "uclibc-ng/.config"
         run_command( cmd )
-        run_command( "make -C " + dev_path + "uclibc-ng oldconfig")
+        # olddefconfig statt oldconfig: nimmt Defaults fuer neue Optionen,
+        # damit der Build nie auf einen interaktiven Prompt wartet
+        run_command( "make -C " + dev_path + "uclibc-ng olddefconfig")
     
     
     return dev_path
