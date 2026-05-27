@@ -45,23 +45,25 @@ def kernel_cpio_hack(dev_path):
 
 
 
-def run_qemu():
-    
+def run_qemu( use_system_qemu=False ):
+
     dev_pack = options.get_dev_package_name()
-    
+
     infos = dev_package.get_dev_infos( dev_pack )
-    
-    
-    #pprint( infos )        
-    
-    if not os.path.exists( options.get_download_dir() + "/qemu-inst.tar.xz"):
-        build.print_line_text("download qemu")
-        dev_package.download_with_progress("https://raw.githubusercontent.com/lordrasmus/uclibc-ng-qemu-imgs/main/qemu-inst.tar.xz", options.get_download_dir() + "/qemu-inst.tar.xz")
-        
-    if not os.path.exists( "qemu-inst/.installed"):
-        build.print_line_text("extract qemu")
-        build.run_command("tar -xaf " + options.get_download_dir() + "/qemu-inst.tar.xz")
-        build.touch("qemu-inst/.installed")
+
+
+    #pprint( infos )
+
+    # mitgeliefertes qemu nur holen/entpacken, wenn nicht das System-qemu genutzt wird
+    if not use_system_qemu:
+        if not os.path.exists( options.get_download_dir() + "/qemu-inst.tar.xz"):
+            build.print_line_text("download qemu")
+            dev_package.download_with_progress("https://raw.githubusercontent.com/lordrasmus/uclibc-ng-qemu-imgs/main/qemu-inst.tar.xz", options.get_download_dir() + "/qemu-inst.tar.xz")
+
+        if not os.path.exists( "qemu-inst/.installed"):
+            build.print_line_text("extract qemu")
+            build.run_command("tar -xaf " + options.get_download_dir() + "/qemu-inst.tar.xz")
+            build.touch("qemu-inst/.installed")
 
 
     dev_path = "dev_" + dev_pack + "/"
@@ -81,5 +83,6 @@ def run_qemu():
 	
     
 	
-    build.run_command( "cd " + dev_path + "; ../qemu-inst/bin/" + infos["CONFIG_QEMU_CMD"] + " -no-reboot" )
-#	./qemu-inst/bin/$CONFIG_QEMU_CMD -no-reboot
+    # System-qemu (aus PATH) oder mitgeliefertes qemu-inst
+    qemu_prefix = "" if use_system_qemu else "../qemu-inst/bin/"
+    build.run_command( "cd " + dev_path + "; " + qemu_prefix + infos["CONFIG_QEMU_CMD"] + " -no-reboot" )

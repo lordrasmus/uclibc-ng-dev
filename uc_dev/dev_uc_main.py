@@ -35,6 +35,8 @@ def dev_uc_main():
     parser.add_argument('-r', '--build_rootfs', action='store_true', help='build uclibc-ng')
     
     parser.add_argument('-q', '--run_qemu', action='store_true', help='run qemu')
+    parser.add_argument('--system-qemu', action='store_true',
+                        help='use the system qemu-system-* (from PATH) instead of the bundled qemu-inst')
     parser.add_argument( '--all_tests', action='store_true',  help='do not auto disable tests')
     parser.add_argument( '--test_list',  help='A comma-separated list of tests')
     
@@ -116,6 +118,6 @@ def dev_uc_main():
         build.build_rootfs( args.all_archs, args.test_list, no_disabled_tests=args.all_tests )
 
     if args.run_qemu:
-        qemu.run_qemu()
+        qemu.run_qemu( args.system_qemu )
 
 

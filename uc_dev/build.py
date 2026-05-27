@@ -222,7 +222,9 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     ret = run_command( "make -C " + dev_path + "uclibc-ng  ") #2>&1 | tee -a " + dev_path + "build.log")
     if ret != 0:
         return
-    ret = run_command( "make -C " + dev_path + "uclibc-ng install DESTDIR=" + os.getcwd() + "/" + dev_path + "/sysroot/" )
+    # dev_path is already absolute; do not prefix os.getcwd() (that produced a
+    # doubled path so -r/build_rootfs never saw the freshly installed libs)
+    ret = run_command( "make -C " + dev_path + "uclibc-ng install DESTDIR=" + dev_path + "sysroot/" )
     
     touch( dev_path + "sysroot/.sysroot_installed" )
    
