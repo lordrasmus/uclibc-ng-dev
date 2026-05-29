@@ -147,7 +147,11 @@ def prepare_toolchain( dev_pack ):
                 os.makedirs(L)
                 if os.path.isfile(sysroot_script):
                     shutil.copy(sysroot_script, L + "/elf2flt.ld")
-                print("isolated: " + L + " (elf2flt.ld only)")
+                # re-expose ldscripts (ld needs them on arches whose binutils
+                # doesn't embed them, e.g. nds32; no libc in there)
+                if os.path.isdir(tc_root + "/sysroot/usr/lib/ldscripts"):
+                    os.symlink("../../../sysroot/usr/lib/ldscripts", L + "/ldscripts")
+                print("isolated: " + L + " (elf2flt.ld + ldscripts)")
 
         touch(dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed")
 
