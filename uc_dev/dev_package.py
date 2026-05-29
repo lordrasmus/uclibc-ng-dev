@@ -200,11 +200,20 @@ def get_dev_file_content( name, dev_pack ):
     
 
 def get_dev_infos( dev_pack ):
-    
+
     infos = get_dev_file_content( "infos.json" , dev_pack )
-    
+
     json_info = json.loads( infos )
-    
+
+    # Older dev packs were built from CRLF-tainted .config files and the
+    # CR survived into infos.json as a trailing '\r' on every value
+    # (e.g. UCLIBC_FORMAT_FLAT="y\r"). Strip trailing whitespace so
+    # downstream equality checks like infos["UCLIBC_FORMAT_FLAT"] == "y"
+    # work regardless of which packer produced the dev pack.
+    for k, v in list(json_info.items()):
+        if isinstance(v, str):
+            json_info[k] = v.rstrip()
+
     return json_info
 
 

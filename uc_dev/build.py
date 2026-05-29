@@ -129,7 +129,26 @@ def prepare_toolchain( dev_pack ):
         print_line_text("extract toolchain " + infos["CONFIG_TOOLCHAIN"] )
         dev_package.write_dev_pack_file( "files/" + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_pack=dev_pack )
         run_command("tar -xaf " + dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz -C " + dev_path )
-        
+
+        # Mirrors the CI 'Isolate toolchain elf2flt.ld' step
+        # (.github/workflows/z_build_workflow.yml): ld-elf2flt looks up
+        # elf2flt.ld via <ld-binary>/../lib/elf2flt.ld which resolves to
+        # <toolchain>/usr/<target>/lib/elf2flt.ld. Older packers shipped
+        # that path as a dangling symlink, newer ones point it at
+        # sysroot/usr/lib which exposes the toolchain's pre-built libc.so
+        # ldscript and collides with the freshly built uClibc-ng. Replace
+        # the symlink with a real directory containing only elf2flt.ld.
+        import glob, shutil
+        tc_root = dev_path + infos["CONFIG_TOOLCHAIN"]
+        sysroot_script = tc_root + "/sysroot/usr/lib/elf2flt.ld"
+        for L in glob.glob(tc_root + "/usr/*-*linux-uclibc*/lib"):
+            if os.path.islink(L):
+                os.remove(L)
+                os.makedirs(L)
+                if os.path.isfile(sysroot_script):
+                    shutil.copy(sysroot_script, L + "/elf2flt.ld")
+                print("isolated: " + L + " (elf2flt.ld only)")
+
         touch(dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed")
 
     os.environ["PATH"] += ":" + dev_path + infos["CONFIG_TOOLCHAIN"] + "/usr/bin"
@@ -219,12 +238,25 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     
     
     
-    ret = run_command( "make -C " + dev_path + "uclibc-ng  ") #2>&1 | tee -a " + dev_path + "build.log")
+    # FLAT (bFLT) builds need -Wl,-elf2flt=-r at link time. For rv32/rv64
+    # the compiler additionally needs -fPIC so the linker emits
+    # R_RISCV_RELATIVE for GOT slots — without it elf2flt has no source
+    # for GOT relocs and binfmt_flat can't fix them up at load time.
+    # Mirrors openadk's mk/vars.mk treatment of ADK_TARGET_BINFMT_FLAT
+    # and the CI workflow (.github/workflows/z_build_workflow.yml).
+    extra = ""
+    if infos.get("UCLIBC_FORMAT_FLAT") == "y":
+        extra = "-Wl,-elf2flt=-r"
+        if infos.get("UCLIBC_ARCH","").startswith("riscv"):
+            extra = "-fPIC " + extra
+    make_extra = " UCLIBC_EXTRA_CFLAGS='" + extra + "'" if extra else ""
+
+    ret = run_command( "make -C " + dev_path + "uclibc-ng -j20" + make_extra )
     if ret != 0:
         return
     # dev_path is already absolute; do not prefix os.getcwd() (that produced a
     # doubled path so -r/build_rootfs never saw the freshly installed libs)
-    ret = run_command( "make -C " + dev_path + "uclibc-ng install DESTDIR=" + dev_path + "sysroot/" )
+    ret = run_command( "make -C " + dev_path + "uclibc-ng" + make_extra + " install DESTDIR=" + dev_path + "sysroot/" )
     
     touch( dev_path + "sysroot/.sysroot_installed" )
    
@@ -351,8 +383,19 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     #run_command("env")
     
     os.environ["CROSS_COMPILE"] = infos["CONFIG_GCC_PREFIX"]
-    os.environ["CFLAGS"]  = "--sysroot=" + os.getcwd() + "/sysroot/"
-    os.environ["LDFLAGS"] = "--sysroot=" + os.getcwd() + "/sysroot/"
+    sysroot = "--sysroot=" + os.getcwd() + "/sysroot/"
+
+    # The test binaries must be built FLAT too, otherwise they come out as
+    # ELF, fail to exec on noMMU and the testrunner reports them as exit
+    # 127 ("applet not found"). Mirror CI (z_images_workflow.yml): append
+    # -Wl,-elf2flt=-r (+ -fPIC for rv32/rv64) to both CFLAGS and LDFLAGS.
+    flat = ""
+    if infos.get("UCLIBC_FORMAT_FLAT") == "y":
+        flat = " -Wl,-elf2flt=-r"
+        if infos.get("UCLIBC_ARCH","").startswith("riscv"):
+            flat = " -fPIC" + flat
+    os.environ["CFLAGS"]  = sysroot + flat
+    os.environ["LDFLAGS"] = sysroot + flat
     
     
     
@@ -514,14 +557,29 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
 
 
     if infos["UCLIBC_ARCH"] == "xtensa":
-        replace_line('CONFIG_EXTRA_CFLAGS=".*"','CONFIG_EXTRA_CFLAGS="-mlongcalls"'     , "busybox-1.36.1/.config")
+        replace_line('CONFIG_EXTRA_CFLAGS=""','CONFIG_EXTRA_CFLAGS="-mlongcalls"'       , "busybox-1.36.1/.config")
 
     replace_line('# CONFIG_STATIC is not set','CONFIG_STATIC=y'                         , "busybox-1.36.1/.config")
-    
 
+    # busybox tc applet references TCA_CBQ_* / TC_CBQ_* constants that were
+    # removed from <linux/pkt_sched.h> in Linux 6.18 (CBQ scheduler dropped
+    # upstream). Disable it unconditionally — CBQ has been deprecated for
+    # years and tc isn't enabled in our defconfig-based rootfs anyway.
+    replace_line('CONFIG_TC=y','# CONFIG_TC is not set'                                 , "busybox-1.36.1/.config")
 
     if infos["UCLIBC_FORMAT_FLAT"] == "y" :
         os.environ["SKIP_STRIP"]="y"
+        # Match CI exactly: put the full FLAT_CFLAGS into BOTH
+        # CONFIG_EXTRA_CFLAGS and CONFIG_EXTRA_LDFLAGS, not split. busybox's
+        # link line uses LDFLAGS but its compile line uses CFLAGS, and on
+        # rv32 the -fPIC needs to reach every compilation unit so GOT
+        # slots end up R_RISCV_RELATIVE — otherwise some objects compile
+        # absolute and binfmt_flat can't relocate them, returning ENOEXEC.
+        flat = "-Wl,-elf2flt=-r"
+        if infos.get("UCLIBC_ARCH","").startswith("riscv"):
+            flat = "-fPIC " + flat
+        replace_line('CONFIG_EXTRA_CFLAGS=""' , 'CONFIG_EXTRA_CFLAGS="' + flat + '"' , "busybox-1.36.1/.config")
+        replace_line('CONFIG_EXTRA_LDFLAGS=""', 'CONFIG_EXTRA_LDFLAGS="' + flat + '"', "busybox-1.36.1/.config")
     else:
         os.environ["SKIP_STRIP"]="0"
         

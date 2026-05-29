@@ -66,7 +66,13 @@ def run_qemu( use_system_qemu=False ):
             build.touch("qemu-inst/.installed")
 
 
-    dev_path = "dev_" + dev_pack + "/"
+    # Must match build.py's prepare_uclibc/prepare_toolchain, which build
+    # into options.get_work_dir() + "dev_" + dev_pack. Earlier this was a
+    # bare CWD-relative "dev_" + dev_pack, so -q ran a stale rootfs from a
+    # different directory than -b/-r wrote to (e.g. a half-built FLAT image
+    # that fails with ENOEXEC), while the freshly built one sat untouched
+    # under the work_dir.
+    dev_path = options.get_work_dir() + "dev_" + dev_pack + "/"
     if not os.path.exists( dev_path ):
         os.mkdir( dev_path )
     
