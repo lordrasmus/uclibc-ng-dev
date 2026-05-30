@@ -1,6 +1,10 @@
 
 
 import os
+import sys
+import select
+import signal
+import subprocess
 
 from uc_dev import build
 from uc_dev import options
@@ -45,7 +49,64 @@ def kernel_cpio_hack(dev_path):
 
 
 
-def run_qemu( use_system_qemu=False ):
+def run_qemu_watch( cmd ):
+    # The minimal qemu test kernels often have no working reboot/poweroff
+    # driver, so "-no-reboot" never makes qemu exit on its own (the kernel just
+    # prints "Restarting system" / "System halted" and loops). Mirror the CI's
+    # run_qemu.py instead: read qemu's serial output (CONFIG_QEMU_CMD uses
+    # -nographic/console=ttyS0, so it lands on stdout), echo it live, and once
+    # the tests_end marker (or a kernel panic) appears, kill qemu's process
+    # group. Use --shell to skip this and keep an interactive login.
+    line_color = "\033[38;5;166m"
+    print( line_color + "run : \033[00m \033[01;32m" + cmd + "\033[00m" )
+    sys.stdout.flush()
+
+    proc = subprocess.Popen( cmd, shell=True, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             start_new_session=True, bufsize=0 )
+
+    read_timeout = 240               # per read; CI uses 240 (riscv64/powerpc slow)
+    max_consecutive_timeouts = 3     # 3 x 240s fully silent -> treat as hung
+    consecutive = 0
+    tail = ""                        # keep a small window to catch a split marker
+    try:
+        while True:
+            rlist, _, _ = select.select( [proc.stdout], [], [], read_timeout )
+            if rlist:
+                data = os.read( proc.stdout.fileno(), 4096 )
+                if not data:                 # EOF -> qemu already exited
+                    break
+                sys.stdout.buffer.write( data )
+                sys.stdout.flush()
+                consecutive = 0
+                window = tail + data.decode( errors="replace" )
+                if "tests_end" in window:
+                    print( "\nqemu: tests_end -> stopping qemu" )
+                    break
+                if "Kernel panic - not syncing: Attempted to kill init" in window:
+                    print( "\nqemu: kernel panic -> stopping qemu" )
+                    break
+                tail = window[-256:]
+            else:
+                if proc.poll() is not None:
+                    break
+                consecutive += 1
+                print( "\nqemu: no output for {0}s (#{1})".format( read_timeout, consecutive ) )
+                if consecutive >= max_consecutive_timeouts:
+                    print( "qemu: silent too long, treating as hung -> stopping qemu" )
+                    break
+    except KeyboardInterrupt:
+        print( "\nCtrl+C -> stopping qemu" )
+    finally:
+        if proc.poll() is None:
+            try:
+                os.killpg( os.getpgid( proc.pid ), signal.SIGKILL )
+            except ProcessLookupError:
+                pass
+        proc.wait()
+
+
+def run_qemu( use_system_qemu=False, shell=False ):
 
     dev_pack = options.get_dev_package_name()
 
@@ -91,4 +152,11 @@ def run_qemu( use_system_qemu=False ):
 	
     # System-qemu (aus PATH) oder mitgeliefertes qemu-inst
     qemu_prefix = "" if use_system_qemu else "../qemu-inst/bin/"
-    build.run_command( "cd " + dev_path + "; " + qemu_prefix + infos["CONFIG_QEMU_CMD"] + " -no-reboot" )
+    qemu_cmd = "cd " + dev_path + "; " + qemu_prefix + infos["CONFIG_QEMU_CMD"] + " -no-reboot"
+    if shell:
+        # Interactive: hand qemu the terminal so the post-test login works;
+        # the user quits qemu manually (reboot in the guest, or Ctrl-A X).
+        build.run_command( qemu_cmd )
+    else:
+        # Default: watch the serial output and stop qemu at tests_end.
+        run_qemu_watch( qemu_cmd )

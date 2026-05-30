@@ -39,6 +39,7 @@ def dev_uc_main():
                         help='use the system qemu-system-* (from PATH) instead of the bundled qemu-inst')
     parser.add_argument( '--all_tests', action='store_true',  help='do not auto disable tests')
     parser.add_argument( '--test_list',  help='A comma-separated list of tests')
+    parser.add_argument( '--shell', action='store_true', help='-q: keep qemu running for an interactive login after the tests (default: -q terminates qemu once it sees the tests_end marker)')
     
     
     
@@ -118,6 +119,6 @@ def dev_uc_main():
         build.build_rootfs( args.all_archs, args.test_list, no_disabled_tests=args.all_tests )
 
     if args.run_qemu:
-        qemu.run_qemu( args.system_qemu )
+        qemu.run_qemu( args.system_qemu, shell=args.shell )
 
 
