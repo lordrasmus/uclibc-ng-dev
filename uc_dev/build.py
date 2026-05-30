@@ -261,7 +261,19 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     # dev_path is already absolute; do not prefix os.getcwd() (that produced a
     # doubled path so -r/build_rootfs never saw the freshly installed libs)
     ret = run_command( "make -C " + dev_path + "uclibc-ng" + make_extra + " install DESTDIR=" + dev_path + "sysroot/" )
-    
+
+    # Mirror z_build_workflow.yml: add lib32/lib64/libx32 -> lib symlinks to the
+    # sysroot. gcc looks for startfiles (crt1.o, ...) in the ABI's multilib OS
+    # dir -- e.g. usr/lib32 for mips n32 -- but uClibc installs only into
+    # usr/lib, so a --sysroot link would miss crt1.o without these. (The
+    # toolchain isolation empties usr/<target>/lib, so this is the only path
+    # left for the test-suite link on non-FLAT arches.)
+    for base in ("", "usr/"):
+        for ml in ("lib32", "lib64", "libx32"):
+            link = dev_path + "sysroot/" + base + ml
+            if not os.path.lexists( link ):
+                os.symlink( "lib", link )
+
     touch( dev_path + "sysroot/.sysroot_installed" )
    
     
