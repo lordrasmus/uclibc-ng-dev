@@ -520,6 +520,11 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     #cp tests_disable rootfs
     with open( "rootfs/bin/run_tests.sh", "w") as f:
         f.write("#!/bin/sh\n")
+        # Kernel soll bei fatalen Signalen (SEGV etc.) den Register-Dump
+        # auf die Konsole drucken - print_fatal_signal() loggt mit KERN_INFO,
+        # also Console-Loglevel anheben (inittab setzt dmesg -n1)
+        f.write("echo 1 > /proc/sys/kernel/print-fatal-signals\n")
+        f.write("dmesg -n8\n")
         #f.write("echo -n 'Disabled Tests : ' ; cat /tests_disable"                     >> rootfs/bin/run_tests.sh
         f.write("cd /usr/lib/uclibc-ng-test/test/\n")
         text = "tests_start"
