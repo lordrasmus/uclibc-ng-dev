@@ -106,7 +106,7 @@ def run_qemu_watch( cmd ):
         proc.wait()
 
 
-def run_qemu( use_system_qemu=False, shell=False ):
+def run_qemu( use_system_qemu=False, shell=False, kernel=None ):
 
     dev_pack = options.get_dev_package_name()
 
@@ -144,7 +144,18 @@ def run_qemu( use_system_qemu=False, shell=False ):
     if not os.path.exists(dev_path + "rootfs.img.xz"):
         dev_package.write_dev_pack_file("files/rootfs.img.xz", dev_path + "/rootfs.img.xz", dev_pack )        
     
-    dev_package.write_dev_pack_file("files/kernel.img", dev_path + "/kernel.img", dev_pack )        
+    # kernel.img: ohne --kernel immer frisch aus dem dev-Pack, damit kein
+    # vergessenes lokales Image stillschweigend weiterbenutzt wird; ein
+    # eigener Kernel wird explizit mit --kernel <pfad> angegeben
+    if kernel is not None:
+        if not os.path.exists( kernel ):
+            print( "kernel image not found : " + kernel )
+            exit(1)
+        build.print_line_text("kernel : " + kernel)
+        with open( kernel, "rb" ) as src, open( dev_path + "kernel.img", "wb" ) as dst:
+            dst.write( src.read() )
+    else:
+        dev_package.write_dev_pack_file("files/kernel.img", dev_path + "/kernel.img", dev_pack )
     if infos["CONFIG_KERNEL_ARCH"] == "kvx" or infos["CONFIG_KERNEL_ARCH"] == "xtensa" or infos["CONFIG_KERNEL_ARCH"] == "csky":
         kernel_cpio_hack( dev_path )
 	
