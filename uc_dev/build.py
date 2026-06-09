@@ -173,10 +173,26 @@ def prepare_uclibc( uclibc_src, dev_pack ):
     dev_path = prepare_toolchain( dev_pack )
 
     print_line_text("rsync uclibc-ng code" )
-    cmd = "rsync --info=progress2 -a --exclude '.config' " +  uclibc_src + "/* " + dev_path+ "uclibc-ng/"
+    # Nur reinen Quellcode importieren. Der geteilte Quell-Tree wird oft in-tree
+    # gebaut (build.py) und traegt dann Fremd-Arch-Build-Artefakte; die NICHT
+    # mitkopieren, sonst landen falsche .os/.a/.so im Build-Dir.
+    obj_excludes = "--exclude '*.os' --exclude '*.o' --exclude '*.oS' --exclude '*.a' --exclude '*.so' --exclude '*.so.*'"
+    cmd = "rsync --info=progress2 -a --exclude '.config' " + obj_excludes + " " +  uclibc_src + "/* " + dev_path+ "uclibc-ng/"
     run_command( cmd )
 
-    
+    # Generierte Header-Symlink-Farm wegwerfen: sie zeigt auf die zuletzt in-tree
+    # gebaute Arch (z.B. include/sys/ucontext.h -> .../nds32/...). uClibcs Regel hat
+    # keine Prerequisites und refresht existierende Symlinks nicht -> make wuerde den
+    # falschen Link behalten. Getrackte echte Header sind regulaere Dateien, keine
+    # Symlinks, bleiben also erhalten. Entspricht headers_clean (Makefile.in).
+    run_command( "find " + dev_path + "uclibc-ng/include/ -type l -delete" )
+    # Generierte REGULAERE Header ebenso wegwerfen (kein Symlink, vom find oben nicht
+    # erfasst): bits/sysnum.h wird aus den Kernel-Headern erzeugt; einer stale Kopie aus
+    # dem Quell-Tree fehlt z.B. __NR_getrandom -> getrandom() faellt weg -> busybox
+    # (seedrng) linkt nicht. make regeneriert sie passend zur aktuellen Header-Version.
+    run_command( "rm -f " + dev_path + "uclibc-ng/include/bits/sysnum.h" )
+
+
     if not os.path.exists( dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] +"/.installed" ):
         print_line_text("extract linux " + infos["CONFIG_KERNEL_VERS"] )
         dev_package.write_dev_pack_file( "files/linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz", dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + ".tar.xz", dev_pack=dev_pack )
