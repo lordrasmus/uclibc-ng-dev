@@ -37,6 +37,27 @@ def print_line_text( text , big=False, gcc=None, linux=None):
     print("\033[01;33m" + '─' * 25 + " \033[01;32m " + text + " \033[01;33m " + '─' * ( width - 28 -len( text ) )  + "\033[00m")
 
 
+def is_coldfire( infos ):
+    # ColdFire needs -mxgot (the 16-bit GOT overflows: "R_68K_GOT16O truncated
+    # to fit") and -fno-dwarf2-cfi-asm, like openadk's ADK_TARGET_CPU_CF.
+    # Ask the compiler instead of parsing the dev-pack name.
+    if infos.get("UCLIBC_ARCH") != "m68k":
+        return False
+    cmd = infos["CONFIG_GCC_PREFIX"] + "gcc -dM -E - < /dev/null"
+    ret = subprocess.getstatusoutput( cmd )
+    return ret[0] == 0 and "__mcoldfire__" in ret[1]
+
+
+def cf_flags( infos ):
+    return " -mxgot -fno-dwarf2-cfi-asm" if is_coldfire( infos ) else ""
+
+
+def is_nommu_elf( infos ):
+    # noMMU + UCLIBC_FORMAT_ELF: the kernel loads these via BINFMT_ELF_FDPIC,
+    # which needs PIE -- a plain ELF gives ENOEXEC ("error -8") on exec.
+    return infos.get("UCLIBC_MMU") == "No" and infos.get("UCLIBC_FORMAT_ELF") == "y"
+
+
 def touch( file_path ):
     # Erstelle oder aktualisiere die Datei
     with open(file_path, 'a'):
@@ -269,6 +290,7 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
         extra = "-Wl,-elf2flt=-r"
         if infos.get("UCLIBC_ARCH","").startswith("riscv"):
             extra = "-fPIC " + extra
+    extra = ( extra + cf_flags( infos ) ).strip()
     make_extra = " UCLIBC_EXTRA_CFLAGS='" + extra + "'" if extra else ""
 
     ret = run_command( "make -C " + dev_path + "uclibc-ng -j20" + make_extra )
@@ -289,6 +311,29 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
             link = dev_path + "sysroot/" + base + ml
             if not os.path.lexists( link ):
                 os.symlink( "lib", link )
+
+    # Two things uClibc builds but does not install when HAVE_SHARED is off,
+    # which noMMU ELF (HAVE_LDSO=y, DOPIC=y, STATIC_PIE=y) needs anyway.
+    # Same workarounds as the CI (z_build_workflow.yml) and openadk.
+    if is_nommu_elf( infos ):
+        # Makerules only builds S$(CRT).o for HAVE_SHARED/shared-FLAT, so gcc
+        # cannot link -pie: "cannot find Scrt1.o". crt1.o already carries the
+        # noMMU PIC handling, so a link to it is correct here.
+        for crt1 in glob.glob( dev_path + "sysroot/**/crt1.o", recursive=True ):
+            scrt1 = os.path.join( os.path.dirname( crt1 ), "Scrt1.o" )
+            if not os.path.exists( scrt1 ):
+                os.link( crt1, scrt1 )
+                print("Scrt1.o: not shipped, linked to crt1.o")
+
+        # install_runtime (Makefile.in) hangs entirely in ifeq($(HAVE_SHARED),y),
+        # so sysroot/lib stays empty and the rootfs has no PT_INTERP -> every
+        # exec fails with ENOEXEC. Copy the loader plus its symlink chain.
+        loaders = glob.glob( dev_path + "uclibc-ng/lib/ld*-uClibc*.so*" )
+        if loaders and not glob.glob( dev_path + "sysroot/lib/ld*-uClibc*.so*" ):
+            os.makedirs( dev_path + "sysroot/lib", exist_ok=True )
+            run_command("cp -a " + dev_path + "uclibc-ng/lib/ld*-uClibc*.so* "
+                        + dev_path + "sysroot/lib/")
+            print("ld-uClibc: not installed by make install, copied from lib/")
 
     touch( dev_path + "sysroot/.sysroot_installed" )
    
@@ -426,8 +471,16 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         flat = " -Wl,-elf2flt=-r"
         if infos.get("UCLIBC_ARCH","").startswith("riscv"):
             flat = " -fPIC" + flat
-    os.environ["CFLAGS"]  = sysroot + flat
-    os.environ["LDFLAGS"] = sysroot + flat
+
+    # noMMU ELF is loaded by BINFMT_ELF_FDPIC and must be PIE.
+    pie_c = pie_ld = ""
+    if not flat and is_nommu_elf( infos ):
+        pie_c  = " -fpie"
+        pie_ld = " -fpie -pie"
+
+    cf = cf_flags( infos )
+    os.environ["CFLAGS"]  = sysroot + flat + pie_c  + cf
+    os.environ["LDFLAGS"] = sysroot + flat + pie_ld + cf
     
     
     
@@ -599,7 +652,14 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     if infos["UCLIBC_ARCH"] == "xtensa":
         replace_line('CONFIG_EXTRA_CFLAGS=""','CONFIG_EXTRA_CFLAGS="-mlongcalls"'       , "busybox-1.36.1/.config")
 
-    replace_line('# CONFIG_STATIC is not set','CONFIG_STATIC=y'                         , "busybox-1.36.1/.config")
+    # -static would silently override the -pie below, and noMMU ELF must be PIE.
+    # Unset it explicitly: the busybox .config is generated once and reused, so
+    # skipping the assignment would leave a CONFIG_STATIC=y from an earlier run.
+    if not is_nommu_elf( infos ):
+        replace_line('# CONFIG_STATIC is not set','CONFIG_STATIC=y'                     , "busybox-1.36.1/.config")
+    else:
+        print("noMMU ELF: CONFIG_STATIC off (-static would defeat -pie)")
+        replace_line('CONFIG_STATIC=y','# CONFIG_STATIC is not set'                     , "busybox-1.36.1/.config")
 
     # busybox tc applet references TCA_CBQ_* / TC_CBQ_* constants that were
     # removed from <linux/pkt_sched.h> in Linux 6.18 (CBQ scheduler dropped
@@ -622,6 +682,15 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         replace_line('CONFIG_EXTRA_LDFLAGS=""', 'CONFIG_EXTRA_LDFLAGS="' + flat + '"', "busybox-1.36.1/.config")
     else:
         os.environ["SKIP_STRIP"]="0"
+        # Prefix match, not '=""': the .config survives between runs, so these
+        # must overwrite whatever an earlier run left behind.
+        cf = cf_flags( infos ).strip()
+        if is_nommu_elf( infos ):
+            replace_line('CONFIG_EXTRA_CFLAGS=' , 'CONFIG_EXTRA_CFLAGS="-fpie ' + cf + '"' , "busybox-1.36.1/.config")
+            replace_line('CONFIG_EXTRA_LDFLAGS=', 'CONFIG_EXTRA_LDFLAGS="-fpie -pie"'      , "busybox-1.36.1/.config")
+        elif cf:
+            replace_line('CONFIG_EXTRA_CFLAGS=' , 'CONFIG_EXTRA_CFLAGS="' + cf + '"'       , "busybox-1.36.1/.config")
+            replace_line('CONFIG_EXTRA_LDFLAGS=', 'CONFIG_EXTRA_LDFLAGS="' + cf + '"'      , "busybox-1.36.1/.config")
         
     if not os.path.exists( "rootfs/.busybox_build"):
         run_command("make -C busybox-1.36.1 oldconfig > /dev/null")
