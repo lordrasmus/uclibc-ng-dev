@@ -42,6 +42,8 @@ def dev_uc_main():
     parser.add_argument( '--all_tests', action='store_true',  help='do not auto disable tests')
     parser.add_argument( '--test_list',  help='A comma-separated list of tests')
     parser.add_argument( '--shell', action='store_true', help='-q: keep qemu running for an interactive login after the tests (default: -q terminates qemu once it sees the tests_end marker)')
+    parser.add_argument( '-m', '--memory',
+                        help='-q: qemu RAM size, e.g. 512 or 512M (replaces a -m in the dev pack qemu command)')
     
     
     
@@ -121,6 +123,6 @@ def dev_uc_main():
         build.build_rootfs( args.all_archs, args.test_list, no_disabled_tests=args.all_tests )
 
     if args.run_qemu:
-        qemu.run_qemu( args.system_qemu, shell=args.shell, kernel=args.kernel )
+        qemu.run_qemu( args.system_qemu, shell=args.shell, kernel=args.kernel, memory=args.memory )
 
 

@@ -119,7 +119,20 @@ def run_qemu_watch( cmd ):
         proc.wait()
 
 
-def run_qemu( use_system_qemu=False, shell=False, kernel=None ):
+def set_qemu_memory( cmd, memory ):
+    # "512" -> "512M"; qemu braucht eine Einheit oder interpretiert MiB, aber
+    # explizit ist klarer. Ein schon vorhandenes -m wird ersetzt, nicht
+    # dupliziert (mehrere -m akzeptiert qemu nicht).
+    if memory[-1].isdigit():
+        memory = memory + "M"
+    parts = cmd.split()
+    if "-m" in parts:
+        parts[ parts.index("-m") + 1 ] = memory
+        return " ".join( parts )
+    return cmd + " -m " + memory
+
+
+def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
 
     dev_pack = options.get_dev_package_name()
 
@@ -181,7 +194,11 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None ):
 	
     # System-qemu (aus PATH) oder mitgeliefertes qemu-inst
     qemu_prefix = "" if use_system_qemu else "../qemu-inst/bin/"
-    qemu_cmd = "cd " + dev_path + "; " + qemu_prefix + infos["CONFIG_QEMU_CMD"] + " -no-reboot"
+    machine_cmd = infos["CONFIG_QEMU_CMD"]
+    if memory is not None:
+        machine_cmd = set_qemu_memory( machine_cmd, memory )
+        build.print_line_text("qemu memory : " + memory)
+    qemu_cmd = "cd " + dev_path + "; " + qemu_prefix + machine_cmd + " -no-reboot"
     if shell:
         # Interactive: hand qemu the terminal so the post-test login works;
         # the user quits qemu manually (reboot in the guest, or Ctrl-A X).
