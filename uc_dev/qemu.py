@@ -13,6 +13,14 @@ from uc_dev import dev_package
 from pprint import pprint
 
 
+MARKER = b'HIER_DAS_ECHTE_CPIO_HIN'
+
+
+def kernel_has_cpio_marker(dev_path):
+    with open( dev_path + 'kernel.img', 'rb') as file:
+        return file.read().find( MARKER ) != -1
+
+
 def kernel_cpio_hack(dev_path):
     # Öffnen der Binärdatei im Schreibmodus
     with open( dev_path + 'kernel.img', 'r+b') as file:
@@ -22,30 +30,35 @@ def kernel_cpio_hack(dev_path):
         with open(dev_path + 'rootfs.img', 'rb') as file2:
             # Binärdaten lesen
             new_string = file2.read()
-            
-        print("RootFS Size : " + str( len( new_string ) ))
-        
-        if len( new_string ) > 17825792:
-            print("   Size > 17825792")
-            exit(1)
 
         # Suchen nach dem zu ersetzenden String
-        old_string = b'HIER_DAS_ECHTE_CPIO_HIN'
-        
-        index = data.find(old_string)
-        print( index )
-        # Überprüfen, ob der zu ersetzende String gefunden wurde
-        if index != -1:
-            # Zur Position im File-Objekt springen
-            file.seek(index)
-            
-            # Den neuen String schreiben
-            file.write(new_string)
-            print("rootfs.img written to kernel image")
-            return
-        
-        print("HIER_DAS_ECHTE_CPIO_HIN not found in kernel image")
-        exit(1)
+        index = data.find( MARKER )
+        if index == -1:
+            print("HIER_DAS_ECHTE_CPIO_HIN not found in kernel image")
+            exit(1)
+
+        # Der Platzhalter ist "Marker + Nullen"; seine Laenge ausmessen statt
+        # zu raten -- die Images haben unterschiedlich grosse Platzhalter
+        # (17 MB bei xtensa/csky/kvx, 24 MB bei m68k-cf5208), und ein zu
+        # grosszuegiges Limit wuerde in den Kernel dahinter schreiben.
+        end = index + len( MARKER )
+        while end < len( data ) and data[end] == 0:
+            end += 1
+        max_size = end - index
+
+        print("RootFS Size : " + str( len( new_string ) ))
+        print("Placeholder : " + str( max_size ) + " (at " + str( index ) + ")")
+
+        if len( new_string ) > max_size:
+            print("   Size > " + str( max_size ))
+            exit(1)
+
+        # Zur Position im File-Objekt springen
+        file.seek(index)
+
+        # Den neuen String schreiben
+        file.write(new_string)
+        print("rootfs.img written to kernel image")
 
 
 
@@ -156,7 +169,12 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None ):
             dst.write( src.read() )
     else:
         dev_package.write_dev_pack_file("files/kernel.img", dev_path + "/kernel.img", dev_pack )
-    if infos["CONFIG_KERNEL_ARCH"] == "kvx" or infos["CONFIG_KERNEL_ARCH"] == "xtensa" or infos["CONFIG_KERNEL_ARCH"] == "csky":
+    # Manche qemu-Maschinen haben ueberhaupt keine initrd-Unterstuetzung
+    # (mcf5208evb, xtensa, csky, kvx ...) -- dort wird das Rootfs in den
+    # Platzhalter im Kernel-Image geschrieben. Nicht an einer Arch-Liste
+    # entscheiden, sondern daran, ob der Aufruf ein -initrd hat und das
+    # Image ueberhaupt einen Platzhalter mitbringt.
+    if "-initrd" not in infos["CONFIG_QEMU_CMD"] and kernel_has_cpio_marker( dev_path ):
         kernel_cpio_hack( dev_path )
 	
     
