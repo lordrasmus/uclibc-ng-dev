@@ -16,7 +16,7 @@ def dev_uc_main():
     # Erstelle einen ArgumentParser
     parser = argparse.ArgumentParser(description='uclibc-ng dev tool')
 
-    parser.add_argument('-u', '--update',action='store_true', help='Update dev tool')
+    parser.add_argument('-u', '--update',action='store_true', help='Update dev tool and the downloaded dev packs')
     parser.add_argument('-d', '--download', nargs='?', const=True, default=False,
                         help='Download Dev Package. Bare -d is interactive; '
                              '-d NAME (substring) or -d all downloads non-interactively')
@@ -62,8 +62,9 @@ def dev_uc_main():
     args = parser.parse_args()
 
     if args.update:
-        
+
         os.system("cd " + uc_dev + "; git pull")
+        dev_package.update_downloaded_dev_packages()
         exit(0)
 
     if args.download:

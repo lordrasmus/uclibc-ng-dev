@@ -149,6 +149,51 @@ def download_dev_package( sel=None ):
 
 
 
+def update_downloaded_dev_packages():
+    """Holt neue Fassungen der bereits heruntergeladenen Packs.
+
+    Nur die vorhandenen -- "alle" waeren ~50 Packs a ~150 MB.  Erkannt wird ein
+    Update wie in der Liste: die mtime der lokalen .tar wird beim Download auf
+    den Server-Zeitstempel gesetzt, weicht sie ab, gibt es eine neue Fassung.
+    """
+    uc_download = options.get_dev_pack_dir()
+
+    if not os.path.exists( uc_download ):
+        print("no dev packages downloaded yet")
+        return
+
+    try:
+        file_list = get_file_list_with_timestamp("https://uclibc-ng.tangotanzen.de/index.php?op=listdev_packages")
+    except Exception as e:
+        print(f"could not fetch the dev package list: {e}")
+        return
+
+    outdated = []
+    for file_info in file_list:
+        local = uc_download + file_info['filename']
+        if os.path.exists( local ) and os.path.getmtime( local ) != file_info['timestamp']:
+            outdated.append( file_info )
+
+    if not outdated:
+        print("all downloaded dev packages are up to date")
+        return
+
+    total = sum( f['size'] for f in outdated )
+    print("updating {0} dev package(s), {1:.1f} GB".format( len( outdated ), total / 1024 / 1024 / 1024 ))
+
+    done = 0
+    for i, file_info in enumerate( outdated, start=1 ):
+        print("\n[{0}/{1}] \033[01;32m{2}\033[00m  ({3:.0f} MB, {4:.1f} of {5:.1f} GB done)".format(
+            i, len( outdated ), file_info['filename'][11:-4],
+            file_info['size'] / 1024 / 1024,
+            done / 1024 / 1024 / 1024, total / 1024 / 1024 / 1024 ))
+        download_with_progress('https://uclibc-ng.tangotanzen.de/uploads/' + file_info['filename'],
+                               uc_download + file_info['filename'])
+        os.utime( uc_download + file_info['filename'],
+                  ( file_info['timestamp'], file_info['timestamp'] ) )
+        done += file_info['size']
+
+
 def list_dev_file_content( dev_pack ):
 
     try:
