@@ -5,6 +5,7 @@ import sys
 import select
 import signal
 import subprocess
+import time
 
 from uc_dev import build
 from uc_dev import options
@@ -21,13 +22,13 @@ def kernel_has_cpio_marker(dev_path):
         return file.read().find( MARKER ) != -1
 
 
-def kernel_cpio_hack(dev_path):
+def kernel_cpio_hack(dev_path, rootfs_img='rootfs.img'):
     # Öffnen der Binärdatei im Schreibmodus
     with open( dev_path + 'kernel.img', 'r+b') as file:
         # Binärdaten lesen
         data = file.read()
 
-        with open(dev_path + 'rootfs.img', 'rb') as file2:
+        with open(dev_path + rootfs_img, 'rb') as file2:
             # Binärdaten lesen
             new_string = file2.read()
 
@@ -119,6 +120,49 @@ def run_qemu_watch( cmd ):
         proc.wait()
 
 
+PACK_DIR = ".pack/"
+
+
+def resolve_rootfs( dev_path, dev_pack ):
+    """Waehlt das Rootfs fuer den qemu-Lauf und liefert (img, img_xz, herkunft).
+
+    Selbst gebaut schlaegt Dev-Pack: 'uc_devel -r' schreibt rootfs.img[.xz]
+    direkt nach dev_path, das soll ein spaeterer -q benutzen.  Die Dateien aus
+    dem Pack landen daneben unter .pack/ und werden bei JEDEM Lauf frisch aus
+    dem Tar geschrieben -- sonst bleibt nach 'uc_devel -d' die alte Version
+    liegen (die Namen sind gleich, ein veraltetes Image ist von einem frisch
+    gebauten nicht zu unterscheiden) und der Lauf misst still das falsche
+    Userspace.
+    """
+    if os.path.exists( dev_path + "rootfs.img.xz" ) or os.path.exists( dev_path + "rootfs.img" ):
+        return ( "rootfs.img", "rootfs.img.xz", "selbst gebaut" )
+
+    if not os.path.exists( dev_path + PACK_DIR ):
+        os.makedirs( dev_path + PACK_DIR )
+
+    dev_package.write_dev_pack_file( "files/rootfs.img", dev_path + PACK_DIR + "rootfs.img", dev_pack )
+    dev_package.write_dev_pack_file( "files/rootfs.img.xz", dev_path + PACK_DIR + "rootfs.img.xz", dev_pack )
+
+    return ( PACK_DIR + "rootfs.img", PACK_DIR + "rootfs.img.xz", "dev pack" )
+
+
+def file_stamp( path ):
+    try:
+        return time.strftime( "%Y-%m-%d %H:%M", time.localtime( os.path.getmtime( path ) ) )
+    except OSError:
+        return "?"
+
+
+def set_qemu_initrd( cmd, name ):
+    # Die Kommandozeile kommt aus infos.json und nennt "rootfs.img.xz" fest;
+    # auf das tatsaechlich gewaehlte Image umbiegen.
+    parts = cmd.split()
+    for i, p in enumerate( parts ):
+        if p == "-initrd" and i + 1 < len( parts ):
+            parts[i + 1] = name
+    return " ".join( parts )
+
+
 def set_qemu_memory( cmd, memory ):
     # "512" -> "512M"; qemu braucht eine Einheit oder interpretiert MiB, aber
     # explizit ist klarer. Ein schon vorhandenes -m wird ersetzt, nicht
@@ -164,12 +208,9 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
         os.mkdir( dev_path )
     
     
-    if not os.path.exists(dev_path + "rootfs.img"):
-        dev_package.write_dev_pack_file("files/rootfs.img", dev_path + "/rootfs.img", dev_pack )        
-    
-    if not os.path.exists(dev_path + "rootfs.img.xz"):
-        dev_package.write_dev_pack_file("files/rootfs.img.xz", dev_path + "/rootfs.img.xz", dev_pack )        
-    
+    rootfs_img, rootfs_xz, rootfs_origin = resolve_rootfs( dev_path, dev_pack )
+    build.print_line_text("rootfs : " + rootfs_origin + "  (" + file_stamp( dev_path + rootfs_xz ) + ")")
+
     # kernel.img: ohne --kernel immer frisch aus dem dev-Pack, damit kein
     # vergessenes lokales Image stillschweigend weiterbenutzt wird; ein
     # eigener Kernel wird explizit mit --kernel <pfad> angegeben
@@ -182,19 +223,20 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
             dst.write( src.read() )
     else:
         dev_package.write_dev_pack_file("files/kernel.img", dev_path + "/kernel.img", dev_pack )
+        build.print_line_text("kernel : dev pack")
     # Manche qemu-Maschinen haben ueberhaupt keine initrd-Unterstuetzung
     # (mcf5208evb, xtensa, csky, kvx ...) -- dort wird das Rootfs in den
     # Platzhalter im Kernel-Image geschrieben. Nicht an einer Arch-Liste
     # entscheiden, sondern daran, ob der Aufruf ein -initrd hat und das
     # Image ueberhaupt einen Platzhalter mitbringt.
     if "-initrd" not in infos["CONFIG_QEMU_CMD"] and kernel_has_cpio_marker( dev_path ):
-        kernel_cpio_hack( dev_path )
+        kernel_cpio_hack( dev_path, rootfs_img )
 	
     
 	
     # System-qemu (aus PATH) oder mitgeliefertes qemu-inst
     qemu_prefix = "" if use_system_qemu else "../qemu-inst/bin/"
-    machine_cmd = infos["CONFIG_QEMU_CMD"]
+    machine_cmd = set_qemu_initrd( infos["CONFIG_QEMU_CMD"], rootfs_xz )
     if memory is not None:
         machine_cmd = set_qemu_memory( machine_cmd, memory )
         build.print_line_text("qemu memory : " + memory)
