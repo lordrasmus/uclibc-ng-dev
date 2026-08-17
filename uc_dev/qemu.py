@@ -124,7 +124,7 @@ PACK_DIR = ".pack/"
 
 
 def resolve_rootfs( dev_path, dev_pack ):
-    """Waehlt das Rootfs fuer den qemu-Lauf und liefert (img, img_xz, herkunft).
+    """Waehlt das Rootfs fuer den qemu-Lauf und liefert (img, img_xz, beschreibung).
 
     Selbst gebaut schlaegt Dev-Pack: 'uc_devel -r' schreibt rootfs.img[.xz]
     direkt nach dev_path, das soll ein spaeterer -q benutzen.  Die Dateien aus
@@ -135,7 +135,10 @@ def resolve_rootfs( dev_path, dev_pack ):
     Userspace.
     """
     if os.path.exists( dev_path + "rootfs.img.xz" ) or os.path.exists( dev_path + "rootfs.img" ):
-        return ( "rootfs.img", "rootfs.img.xz", "selbst gebaut" )
+        stamp = file_stamp( dev_path + "rootfs.img.xz" )
+        if stamp == "?":
+            stamp = file_stamp( dev_path + "rootfs.img" )
+        return ( "rootfs.img", "rootfs.img.xz", "selbst gebaut  (" + stamp + ")" )
 
     if not os.path.exists( dev_path + PACK_DIR ):
         os.makedirs( dev_path + PACK_DIR )
@@ -143,7 +146,12 @@ def resolve_rootfs( dev_path, dev_pack ):
     dev_package.write_dev_pack_file( "files/rootfs.img", dev_path + PACK_DIR + "rootfs.img", dev_pack )
     dev_package.write_dev_pack_file( "files/rootfs.img.xz", dev_path + PACK_DIR + "rootfs.img.xz", dev_pack )
 
-    return ( PACK_DIR + "rootfs.img", PACK_DIR + "rootfs.img.xz", "dev pack" )
+    # Stand des PACKS zeigen, nicht den des Auspackens: die Dateien werden bei
+    # jedem Lauf neu geschrieben und traegen daher immer "jetzt".  Die mtime der
+    # .tar ist der Server-Zeitstempel (beim Download per os.utime gesetzt, daran
+    # erkennt -d auch "update avaible"), also der Zeitpunkt des CI-Builds.
+    return ( PACK_DIR + "rootfs.img", PACK_DIR + "rootfs.img.xz",
+             "dev pack  (" + file_stamp( options.get_dev_package_tar( dev_pack ) ) + ")" )
 
 
 def file_stamp( path ):
@@ -209,7 +217,7 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
     
     
     rootfs_img, rootfs_xz, rootfs_origin = resolve_rootfs( dev_path, dev_pack )
-    build.print_line_text("rootfs : " + rootfs_origin + "  (" + file_stamp( dev_path + rootfs_xz ) + ")")
+    build.print_line_text("rootfs : " + rootfs_origin)
 
     # kernel.img: ohne --kernel immer frisch aus dem dev-Pack, damit kein
     # vergessenes lokales Image stillschweigend weiterbenutzt wird; ein
@@ -223,7 +231,7 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
             dst.write( src.read() )
     else:
         dev_package.write_dev_pack_file("files/kernel.img", dev_path + "/kernel.img", dev_pack )
-        build.print_line_text("kernel : dev pack")
+        build.print_line_text("kernel : dev pack  (" + file_stamp( options.get_dev_package_tar( dev_pack ) ) + ")")
     # Manche qemu-Maschinen haben ueberhaupt keine initrd-Unterstuetzung
     # (mcf5208evb, xtensa, csky, kvx ...) -- dort wird das Rootfs in den
     # Platzhalter im Kernel-Image geschrieben. Nicht an einer Arch-Liste
