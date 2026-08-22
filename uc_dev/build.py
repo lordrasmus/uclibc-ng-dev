@@ -52,6 +52,15 @@ def cf_flags( infos ):
     return " -mxgot -fno-dwarf2-cfi-asm" if is_coldfire( infos ) else ""
 
 
+def config_has( needle, path="uclibc-ng/.config" ):
+    """True if the built uClibc-ng config contains this exact line."""
+    try:
+        with open( path ) as f:
+            return any( line.strip() == needle for line in f )
+    except OSError:
+        return False
+
+
 def is_nommu_elf( infos ):
     # noMMU + UCLIBC_FORMAT_ELF: the kernel loads these via BINFMT_ELF_FDPIC,
     # which needs PIE -- a plain ELF gives ENOEXEC ("error -8") on exec.
@@ -486,9 +495,18 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         pie_c  = " -fpie"
         pie_ld = " -fpie -pie"
 
+    # A uClibc-ng built without HAVE_SHARED leaves no libc.so behind, but the
+    # dev pack's sysroot still ships a shared libgcc; without -static the link
+    # picks that up and dies on an undefined dl_iterate_phdr. -static is also
+    # simply what a static libc wants. Not for FLAT or noMMU ELF: both need
+    # their own link mode and -static would override the -pie.
+    static = ""
+    if not flat and not pie_ld and not config_has( "HAVE_SHARED=y" ):
+        static = " -static"
+
     cf = cf_flags( infos )
     os.environ["CFLAGS"]  = sysroot + flat + pie_c  + cf
-    os.environ["LDFLAGS"] = sysroot + flat + pie_ld + cf
+    os.environ["LDFLAGS"] = sysroot + flat + pie_ld + static + cf
     
     
     
