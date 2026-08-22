@@ -246,8 +246,8 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
     qemu_prefix = "" if use_system_qemu else "../qemu-inst/bin/"
     # Welche Variante, entscheidet das Pack: sein CONFIG_QEMU_CMD nennt das
     # Image, das zu seinem Kernel passt.  Der riscv32-6.18-noMMU-Kernel etwa ist
-    # ohne CONFIG_RD_XZ gebaut und panict mit rootfs.img.xz ("invalid magic at
-    # start of compressed archive" -> "Unable to mount root fs").  Nur ausweichen,
+    # ohne CONFIG_RD_XZ gebaut und panict mit rootfs.img.xz ("Initramfs unpacking
+    # failed: decompressor failed" -> "Unable to mount root fs").  Nur ausweichen,
     # wenn die genannte Datei fehlt.
     named = ""
     parts = infos["CONFIG_QEMU_CMD"].split()
