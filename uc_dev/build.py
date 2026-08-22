@@ -464,13 +464,21 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
 
     # The test binaries must be built FLAT too, otherwise they come out as
     # ELF, fail to exec on noMMU and the testrunner reports them as exit
-    # 127 ("applet not found"). Mirror CI (z_images_workflow.yml): append
-    # -Wl,-elf2flt=-r (+ -fPIC for rv32/rv64) to both CFLAGS and LDFLAGS.
+    # 127 ("applet not found"). Mirror CI (z_images_workflow.yml) exactly --
+    # every flag below is one the CI passes, and a local run that differs
+    # measures something the CI never builds.
     flat = ""
     if infos.get("UCLIBC_FORMAT_FLAT") == "y":
-        flat = " -Wl,-elf2flt=-r"
+        # -s65536: elf2flt defaults to a 4 KB stack, and a bFLT stack cannot
+        # grow -- it is a fixed slice of the one mapping that also holds text,
+        # data and bss. test/unistd/clone.c alone declares 24 KB of locals.
+        flat = " -Wl,-elf2flt=-r -Wl,-elf2flt=-s65536"
         if infos.get("UCLIBC_ARCH","").startswith("riscv"):
-            flat = " -fPIC" + flat
+            # -fPIC so GOT slots get relocs elf2flt can harvest; --no-relax
+            # because ld turns pc relative sequences into absolute ones once
+            # the address fits a 12 bit immediate, and a bFLT load base is
+            # not known at link time.
+            flat = " -fPIC -Wl,--no-relax" + flat
 
     # noMMU ELF is loaded by BINFMT_ELF_FDPIC and must be PIE.
     pie_c = pie_ld = ""
