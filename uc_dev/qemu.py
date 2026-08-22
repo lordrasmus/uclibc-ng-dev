@@ -247,8 +247,7 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
     # Welche Variante, entscheidet das Pack: sein CONFIG_QEMU_CMD nennt das
     # Image, das zu seinem Kernel passt.  Der riscv32-6.18-noMMU-Kernel etwa ist
     # ohne CONFIG_RD_XZ gebaut und panict mit rootfs.img.xz ("Initramfs unpacking
-    # failed: decompressor failed" -> "Unable to mount root fs").  Nur ausweichen,
-    # wenn die genannte Datei fehlt.
+    # failed: decompressor failed" -> "Unable to mount root fs").
     named = ""
     parts = infos["CONFIG_QEMU_CMD"].split()
     if "-initrd" in parts:
@@ -256,8 +255,18 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
         if i + 1 < len( parts ):
             named = parts[i + 1]
     initrd = rootfs_xz if named.endswith( ".xz" ) else rootfs_img
-    if not os.path.exists( dev_path + initrd ):
-        initrd = rootfs_img if initrd == rootfs_xz else rootfs_xz
+    if named != "" and not os.path.exists( dev_path + initrd ):
+        # NICHT auf die andere Variante ausweichen: der Lauf liefe dann still
+        # gegen ein Image, das niemand angefordert hat.  Jedes Pack bringt beide
+        # Varianten mit und "uc_devel -r" schreibt beide (cpio, dann "xz -k"),
+        # ein Fehlen ist also ein Defekt und keine Konfiguration.
+        other = rootfs_img if initrd == rootfs_xz else rootfs_xz
+        print( "rootfs fehlt : " + dev_path + initrd
+               + "  (das Pack verlangt " + named + ")" )
+        if os.path.exists( dev_path + other ):
+            print( "vorhanden ist nur " + other
+                   + " -- 'uc_devel -r' neu laufen lassen oder das Pack pruefen" )
+        exit( 1 )
     machine_cmd = set_qemu_initrd( infos["CONFIG_QEMU_CMD"], initrd )
     if memory is not None:
         machine_cmd = set_qemu_memory( machine_cmd, memory )
