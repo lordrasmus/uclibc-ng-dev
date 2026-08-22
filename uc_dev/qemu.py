@@ -244,7 +244,21 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
 	
     # System-qemu (aus PATH) oder mitgeliefertes qemu-inst
     qemu_prefix = "" if use_system_qemu else "../qemu-inst/bin/"
-    machine_cmd = set_qemu_initrd( infos["CONFIG_QEMU_CMD"], rootfs_xz )
+    # Welche Variante, entscheidet das Pack: sein CONFIG_QEMU_CMD nennt das
+    # Image, das zu seinem Kernel passt.  Der riscv32-6.18-noMMU-Kernel etwa ist
+    # ohne CONFIG_RD_XZ gebaut und panict mit rootfs.img.xz ("invalid magic at
+    # start of compressed archive" -> "Unable to mount root fs").  Nur ausweichen,
+    # wenn die genannte Datei fehlt.
+    named = ""
+    parts = infos["CONFIG_QEMU_CMD"].split()
+    if "-initrd" in parts:
+        i = parts.index( "-initrd" )
+        if i + 1 < len( parts ):
+            named = parts[i + 1]
+    initrd = rootfs_xz if named.endswith( ".xz" ) else rootfs_img
+    if not os.path.exists( dev_path + initrd ):
+        initrd = rootfs_img if initrd == rootfs_xz else rootfs_xz
+    machine_cmd = set_qemu_initrd( infos["CONFIG_QEMU_CMD"], initrd )
     if memory is not None:
         machine_cmd = set_qemu_memory( machine_cmd, memory )
         build.print_line_text("qemu memory : " + memory)
