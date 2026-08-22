@@ -574,38 +574,47 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
 
     if not test_list == None:
 
-        liste = test_list.split(",")
-            
-        liste_found = []
-        
-        for t in liste:
-            #print(t)
-            
-            ret= glob.glob("rootfs/usr/lib/uclibc-ng-test/test/*/" + t)
-            if len( ret ) != 1:
-                print("\033[01;31mtest " + t + " not found\033[00m")
-            else:
-                liste_found.append( t )
-                
-        
-        with open("rootfs/usr/lib/uclibc-ng-test/test/uclibcng-testrunner.in", "r") as f:
-            lines = f.readlines()
-        
-        new_file = ""
-        
-        for line in lines:
-            
-            for t in liste_found:
-                
-                if t in line:
-                    #print(line)
-                    new_file += line
-                    break
-        
-        #print( new_file )
-        
-        with open("rootfs/usr/lib/uclibc-ng-test/test/uclibcng-testrunner.in", "w") as f:
-            f.write( new_file )
+        runner = "rootfs/usr/lib/uclibc-ng-test/test/uclibcng-testrunner.in"
+
+        # Eine Runner-Zeile ist: <erwarteter_rc> <quellname> <binaername> <verzeichnis> <cmd>
+        # Auf dem Binaernamen vergleichen, nicht per Teilstring auf der Zeile:
+        # "clone" traf sonst auch tst-clone1, "tst-tls3" auch tst-tls3mod.so.
+        with open( runner, "r") as f:
+            lines = [ l for l in f.readlines() if len( l.split() ) >= 4 ]
+
+        def fields( line ):
+            f = line.split()
+            return f[2], f[3]           # binaername, verzeichnis
+
+        selected = []
+        for t in [ x.strip() for x in test_list.split(",") if x.strip() ]:
+
+            # "verzeichnis/name" waehlt gezielt aus; ohne Verzeichnis zaehlt der
+            # Name allein, und der -O2-Zwilling kommt wie bisher mit.
+            subdir, _, name = t.rpartition("/")
+            names = { name } if name.endswith("-O2") else { name, name + "-O2" }
+
+            hits = [ l for l in lines
+                     if fields( l )[0] in names
+                     and ( subdir == "" or fields( l )[1] == subdir ) ]
+
+            if len( hits ) == 0:
+                print("\033[01;31mtest " + t + " nicht in der Testliste\033[00m")
+                continue
+
+            dirs = sorted( { fields( l )[1] for l in hits } )
+            if subdir == "" and len( dirs ) > 1:
+                print("test " + t + ": in " + ", ".join( dirs ) + " -- alle ausgewaehlt")
+
+            selected += hits
+
+        if len( selected ) == 0:
+            # Sonst laeuft eine leere Suite durch und meldet "0 failed".
+            print("\033[01;31m--test_list: kein Test ausgewaehlt, Abbruch\033[00m")
+            sys.exit( 1 )
+
+        with open( runner, "w") as f:
+            f.write( "".join( selected ) )
     
     
     run_command("sort -k4,4 -k1,1 rootfs/usr/lib/uclibc-ng-test/test/uclibcng-testrunner.in > rootfs/usr/lib/uclibc-ng-test/test/uclibcng-testrunner.in.sort")
