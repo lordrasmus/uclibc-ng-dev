@@ -207,7 +207,13 @@ def prepare_uclibc( uclibc_src, dev_pack ):
     # gebaut (build.py) und traegt dann Fremd-Arch-Build-Artefakte; die NICHT
     # mitkopieren, sonst landen falsche .os/.a/.so im Build-Dir.
     obj_excludes = "--exclude '*.os' --exclude '*.o' --exclude '*.oS' --exclude '*.a' --exclude '*.so' --exclude '*.so.*'"
-    cmd = "rsync --info=progress2 -a --exclude '.config' " + obj_excludes + " " +  uclibc_src + "/* " + dev_path+ "uclibc-ng/"
+    # --no-times: die mtimes des Quell-Trees NICHT uebernehmen. Sonst kommt eine
+    # inhaltlich neue Datei mit altem Stempel an und ist damit aelter als die im
+    # Dev-Pack schon gebauten Artefakte -> make sieht "nichts zu tun". Getroffen hat
+    # das die Locale-Generatoren: gen_ldc blieb stehen und schrieb locale_data.c in
+    # der alten Tabellenanordnung (abgeschnittener Blob -> assert in locale.c).
+    # Preis: jedes Kopieren setzt die aktuelle Zeit, der naechste Build ist also voll.
+    cmd = "rsync --info=progress2 -a --no-times --exclude '.config' " + obj_excludes + " " +  uclibc_src + "/* " + dev_path+ "uclibc-ng/"
     run_command( cmd )
 
     # Generierte Header-Symlink-Farm wegwerfen: sie zeigt auf die zuletzt in-tree
