@@ -184,6 +184,20 @@ def set_qemu_memory( cmd, memory ):
     return cmd + " -m " + memory
 
 
+def set_qemu_console( cmd ):
+    # Ein Pack, dessen CONFIG_QEMU_CMD "-serial vc" sagt, legt den ersten UART
+    # auf eine grafische Konsole, die -nographic gar nicht bereitstellt -- man
+    # sieht dann nichts, auch keinen Kernel-Boot. Im Baum ist das sh4/r2d, und
+    # dort liegt die Konsole zusaetzlich auf dem ZWEITEN UART
+    # (CONFIG_CMDLINE="console=ttySC1,115200"). Die CI kommt nur deshalb dran,
+    # weil run_qemu.py " -serial pipe:guest_pipe" anhaengt und damit einen
+    # zweiten Port schafft. Dieselbe Aufteilung hier: erster Port ins Leere,
+    # zweiter auf stdio.
+    if "-serial vc" not in cmd:
+        return cmd
+    return cmd.replace( "-serial vc", "-serial null", 1 ) + " -serial mon:stdio"
+
+
 def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
 
     dev_pack = options.get_dev_package_name()
@@ -267,7 +281,7 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
             print( "vorhanden ist nur " + other
                    + " -- 'uc_devel -r' neu laufen lassen oder das Pack pruefen" )
         exit( 1 )
-    machine_cmd = set_qemu_initrd( infos["CONFIG_QEMU_CMD"], initrd )
+    machine_cmd = set_qemu_console( set_qemu_initrd( infos["CONFIG_QEMU_CMD"], initrd ) )
     if memory is not None:
         machine_cmd = set_qemu_memory( machine_cmd, memory )
         build.print_line_text("qemu memory : " + memory)
