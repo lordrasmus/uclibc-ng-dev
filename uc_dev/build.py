@@ -629,6 +629,15 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         # also Console-Loglevel anheben (inittab setzt dmesg -n1)
         f.write("echo 1 > /proc/sys/kernel/print-fatal-signals\n")
         f.write("dmesg -n8\n")
+        # Der Initramfs-Rootfs ist ein tmpfs mit der Vorgabe "halbes RAM". Auf
+        # sh4/r2d (feste 64 MB, -m wird verworfen) sind das 29 MB, und das
+        # Rootfs belegt davon 27,7 -- 1,3 MB Luft fuer alle .out-Dateien. Geht
+        # die aus, scheitern Schreibzugriffe mit ENOSPC, und ein Lesezugriff auf
+        # ein Loch in einer tmpfs-Datei liefert SIGBUS (so stirbt mmap2). Die
+        # Grenze ist willkuerlich: das Rootfs liegt ohnehin im RAM, ~30 MB
+        # bleiben frei. Hochsetzen kostet also nichts.
+        f.write("mount -o remount,size=90% / 2>/dev/null\n")
+        f.write("df -h / | tail -1\n")
         #f.write("echo -n 'Disabled Tests : ' ; cat /tests_disable"                     >> rootfs/bin/run_tests.sh
         f.write("cd /usr/lib/uclibc-ng-test/test/\n")
         text = "tests_start"
