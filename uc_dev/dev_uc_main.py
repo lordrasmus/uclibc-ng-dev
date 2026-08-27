@@ -98,12 +98,22 @@ def dev_uc_main():
         exit(0)
     
         
-    if args.test_list:
-        if not args.build_rootfs:
-            print( "--test_list should be used with -r/--build_rootfs")
-        
-        
-        
+    # Options that only mean something together with one action.  This used to
+    # print a note and carry on, which reads like it worked: --test_list handed
+    # to -q silently ran the whole suite instead of the named tests.
+    misused = []
+    if ( args.test_list or args.all_tests ) and not args.build_rootfs:
+        misused.append( "--test_list and --all_tests need -r/--build_rootfs, "
+                        "the test list is written into the rootfs" )
+    if ( args.system_qemu or args.kernel or args.shell or args.memory ) \
+            and not args.run_qemu:
+        misused.append( "--system-qemu, --kernel, --shell and -m need -q/--run_qemu" )
+    if len( misused ) > 0:
+        for m in misused:
+            print( "error: " + m )
+        exit(1)
+
+
     if args.config_uclibc:
         if options.get_uclibc_repo() == "":
             print("set uclibc-ng src with --uclibc_src")
