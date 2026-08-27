@@ -635,7 +635,10 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         width  = 110
         f.write("echo -e '\033[01;33m" + '─' * 25 + " \033[01;32m " + text + " \033[01;33m " + '─' * ( width - 28 -len( text ) )  + "\033[00m'\n")
         #f.write("echo '-------------------- tests_start ------------------------'\n")
-        f.write("sh uclibcng-testrunner_color.sh\n")
+        # The C runner, -c for the coloured result and the padded subdir column
+        # -- what uclibcng-testrunner_color.sh printed. It also emits a
+        # "TIME <name> <ms>" line per test.
+        f.write("./uclibcng-testrunner -c\n")
         text = "tests_end"
         f.write("echo -e '\033[01;33m" + '─' * 25 + " \033[01;32m " + text + " \033[01;33m " + '─' * ( width - 28 -len( text ) )  + "\033[00m'\n")
         #f.write("echo '-------------------- tests_end --------------------------'\n")
