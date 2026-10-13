@@ -161,14 +161,40 @@ def get_dev_pack_list():
     return build_list
 
 
+# Pack-Auswahl nur fuer diesen Aufruf, aus -p/--pack oder UC_DEV_PACK.  Steht
+# bewusst NICHT in settings.json: wer gleichzeitig an zwei Arches arbeitet,
+# stellt sonst der anderen Sitzung staendig die globale Auswahl um.  Alles
+# andere ist ohnehin pro Pack getrennt -- die dev_<name>/-Ordner, der Cache --,
+# nur dieser eine Wert war gemeinsam.
+dev_package_override = None
+
+
+def set_dev_package_override( name ):
+    """Loest einen eindeutigen Namens-Substring auf, ohne settings.json zu aendern."""
+
+    global dev_package_override
+
+    matches = [ p for p in get_dev_pack_list() if name in p ]
+    if len( matches ) != 1:
+        print("pack '{0}' matched {1} packages: {2}".format(
+            name, len(matches), matches ) )
+        exit(1)
+
+    dev_package_override = matches[0]
+    print("using \033[01;32m{0}\033[00m for this run".format( matches[0] ) )
+
+
 def get_dev_package_name( ):
-        
+
+    if dev_package_override is not None:
+        return dev_package_override
+
     setts = load_settings()
-    
+
     if not "dev_package" in setts or setts["dev_package"] == "":
         print("no dev package selected. run uc_devel -s")
         exit(1)
-    
+
     return setts["dev_package"]
 
 def get_dev_package_tar( dev_pack ):

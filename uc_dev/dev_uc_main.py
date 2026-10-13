@@ -23,6 +23,11 @@ def dev_uc_main():
     parser.add_argument('-s', '--select', nargs='?', const=True, default=False,
                         help='Select current dev package. Bare -s is interactive; '
                              '-s NAME selects by (substring) match non-interactively')
+    parser.add_argument('-p', '--pack',
+                        help='use this dev package for THIS run only, by (substring) match. '
+                             'Unlike -s it does not change the stored selection, so a second '
+                             'session can work on another arch at the same time. '
+                             'UC_DEV_PACK does the same for a whole shell; -p wins.')
     parser.add_argument('--clean', action='store_true', help='delete all dev folders in workspace')
     
     parser.add_argument('-a', '--all_archs', action='store_true', help='build for all downloaded archs')
@@ -83,7 +88,14 @@ def dev_uc_main():
         options.set_options("work_dir", os.path.abspath( args.work_dir ) )
     
     options.check_settings()
-    
+
+    # Erst hier, nicht weiter oben: die Liste der Packs haengt am work_dir, und
+    # das setzt -w gerade eben.  -p schlaegt UC_DEV_PACK, damit ein einzelner
+    # Aufruf aus einer festgenagelten Shell ausbrechen kann.
+    pack = args.pack if args.pack else os.environ.get("UC_DEV_PACK")
+    if pack:
+        options.set_dev_package_override( pack )
+
     if args.clean:
         cmd = "rm -rf " + options.get_work_dir()+ "dev_*"
         print( "\nrunning : " + cmd )
