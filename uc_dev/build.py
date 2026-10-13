@@ -543,6 +543,24 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         run_command("git clone https://github.com/lordrasmus/uclibc-ng-test.git")
         
         touch( "uclibc-ng-test/.installed" )
+    else:
+        # Der Klon entstand bisher genau einmal und wurde nie wieder angefasst: ein
+        # Dev-Pack von vor einem halben Jahr baute also eine ein halbes Jahr alte
+        # Testsuite, ohne das irgendwo zu sagen. Am 2026-10-13 lief so ein Test
+        # gegen einen Klon, dessen run_tests.sh einen Testrunner aufruft, den es
+        # dort noch nicht gibt -- der Gast meldete "./uclibcng-testrunner: not
+        # found" und direkt danach tests_end, was wie ein sauberer Lauf aussieht.
+        #
+        # --ff-only, nie mergen. Eine lokale Aenderung am Klon ist ein legitimer
+        # Arbeitsstil (einen Test im Dev-Pack direkt anpassen und sofort booten),
+        # die darf das Update nicht wegwerfen. Deshalb ist ein Fehlschlag -- kein
+        # Netz, lokale Aenderungen, abgezweigter Branch -- auch kein Abbruch: er
+        # wird gemeldet, gebaut wird mit dem vorhandenen Stand.
+        print_line_text("update uclibc-ng-test")
+        if run_command("git -C uclibc-ng-test pull --ff-only") != 0:
+            print("\033[01;33muclibc-ng-test nicht aktualisiert (kein Netz oder "
+                  "lokale Aenderungen) -- es wird mit dem vorhandenen Stand "
+                  "gebaut\033[00m")
 
     
     test_disable = []
