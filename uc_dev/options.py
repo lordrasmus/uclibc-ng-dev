@@ -220,3 +220,21 @@ def get_uclibc_repo( ):
         return setts["uclibc-ng_repo"]
         
     return ""
+
+
+def set_test_repo( path ):
+    
+    setts = load_settings()
+    
+    setts["uclibc-ng-test_repo"] = os.path.abspath( path )
+    
+    save_settings( setts )
+
+def get_test_repo( ):
+    
+    setts = load_settings()
+    
+    if "uclibc-ng-test_repo" in setts:
+        return setts["uclibc-ng-test_repo"]
+        
+    return ""

@@ -537,7 +537,57 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     #run_command("cp -av sysroot/usr/lib/libgcc*.so* rootfs/usr/lib/")
 
     
-    if not os.path.exists("uclibc-ng-test/.installed"):
+    test_src = options.get_test_repo()
+    
+    if test_src != "":
+        # Gegenstueck zu --uclibc_src: einen lokalen Testbaum hineinsyncen, statt
+        # den geklonten zu benutzen. Damit ist das Verzeichnis im Dev-Pack ein
+        # reines Bauverzeichnis -- man darf es jederzeit wegwerfen, und niemand
+        # muss beim Aktualisieren auf lokale Aenderungen aufpassen.
+        print_line_text("rsync uclibc-ng-test code")
+        
+        # Welche Dateien Quellcode sind, beantwortet git und nicht eine
+        # Endungsliste: die .gitignore der Suite ignoriert alles OHNE Endung, und
+        # genau das sind die gebauten Testprogramme. Ein Quellbaum, in dem schon
+        # mal gebaut wurde, traegt davon welche fuer die falsche Arch (hier lagen
+        # i386-Binaries darin), die sonst in der rootfs landen.
+        ret = subprocess.getstatusoutput("git -C " + test_src + " ls-files --cached")
+        if ret[0] != 0:
+            print("--test_src ist kein git-Checkout: " + test_src)
+            os.chdir( cur_dir )
+            return False
+        
+        tracked = [ f for f in ret[1].split("\n") if f != "" ]
+        tracked_dirs = set( os.path.dirname( f ) for f in tracked )
+        
+        # Noch nicht committete Tests sollen mit, fremde Verzeichnisse nicht. Die
+        # Regel dafuer: eine unversionierte Datei kommt nur mit, wenn in ihrem
+        # Verzeichnis schon versionierte liegen. Ein neues test/misc/tst-foo.c ist
+        # damit dabei, ein Werkzeugbaum, der sich jemand dort abgelegt hat, nicht.
+        # Ohne diese Regel waren es sechs Kopien eines entpackten qemu zu je 240 MB
+        # -- die .gitignore der Suite hebt mit "!*/" alle Verzeichnisse und mit
+        # "!*.*" jede Datei mit Endung wieder auf, .tar und .so darin sind also
+        # nicht ignoriert. Die rootfs wuchs auf 315 MB, und der Gast brach beim
+        # Auspacken ab: "Initramfs unpacking failed: write error".
+        ret = subprocess.getstatusoutput("git -C " + test_src + " ls-files --others --exclude-standard")
+        
+        untracked = [ f for f in ret[1].split("\n")
+                      if f != "" and os.path.dirname( f ) in tracked_dirs ]
+        
+        # .d/.o/.out haben eine Endung, sind damit nicht ignoriert und muessen
+        # von Hand raus.
+        files = [ f for f in tracked + untracked
+                  if not f.endswith((".d", ".o", ".out")) ]
+        
+        with open("uclibc-ng-test.files", "w") as f:
+            f.write("\n".join( files ) + "\n")
+        
+        run_command("mkdir -p uclibc-ng-test")
+        run_command("rsync -a --no-times --files-from=uclibc-ng-test.files " + test_src + "/ uclibc-ng-test/")
+        
+        os.remove("uclibc-ng-test.files")
+        
+    elif not os.path.exists("uclibc-ng-test/.installed"):
         print_line_text("clone uclibc-ng-test")
         
         run_command("git clone https://github.com/lordrasmus/uclibc-ng-test.git")

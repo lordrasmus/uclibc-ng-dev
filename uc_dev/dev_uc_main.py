@@ -33,6 +33,7 @@ def dev_uc_main():
     parser.add_argument('-a', '--all_archs', action='store_true', help='build for all downloaded archs')
     parser.add_argument( '-w', '--work_dir',  help='path where builds are done and files are cached')
     parser.add_argument( '--uclibc_src',  help='path to uclibc')
+    parser.add_argument( '--test_src',    help='path to a uclibc-ng-test checkout; it is remembered like --uclibc_src and used instead of the clone in the dev pack')
     
     
     parser.add_argument('-c', '--config_uclibc', action='store_true', help='configure uclibc-ng')
@@ -83,6 +84,9 @@ def dev_uc_main():
 
     if args.uclibc_src:
         options.set_uclibc_repo( args.uclibc_src )
+
+    if args.test_src:
+        options.set_test_repo( args.test_src )
     
     if args.work_dir:
         options.set_options("work_dir", os.path.abspath( args.work_dir ) )
