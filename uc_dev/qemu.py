@@ -22,15 +22,11 @@ def kernel_has_cpio_marker(dev_path):
         return file.read().find( MARKER ) != -1
 
 
-def kernel_cpio_hack(dev_path, rootfs_img='rootfs.img'):
+def kernel_cpio_hack(dev_path, rootfs_img='rootfs.img', rootfs_xz=None):
     # Öffnen der Binärdatei im Schreibmodus
     with open( dev_path + 'kernel.img', 'r+b') as file:
         # Binärdaten lesen
         data = file.read()
-
-        with open(dev_path + rootfs_img, 'rb') as file2:
-            # Binärdaten lesen
-            new_string = file2.read()
 
         # Suchen nach dem zu ersetzenden String
         index = data.find( MARKER )
@@ -47,7 +43,22 @@ def kernel_cpio_hack(dev_path, rootfs_img='rootfs.img'):
             end += 1
         max_size = end - index
 
-        print("RootFS Size : " + str( len( new_string ) ))
+        # Passt das rohe cpio nicht, das gepackte nehmen: unpack_to_rootfs()
+        # laesst decompress_method() ueber den eingebauten Blob laufen und
+        # ueberspringt die Nullen dahinter, ein xz-Rootfs ist also genauso
+        # gueltig. Der sparc-leon3-Kernel traegt deshalb nur 16 MB Platzhalter
+        # -- roh braeuchte dasselbe Rootfs 80, weil der Linker jedes
+        # Datensegment auf 64K ausrichtet und 86% der Datei Nullen sind.
+        name = rootfs_img
+        if os.path.getsize( dev_path + name ) > max_size and rootfs_xz is not None \
+           and os.path.exists( dev_path + rootfs_xz ):
+            name = rootfs_xz
+
+        with open(dev_path + name, 'rb') as file2:
+            # Binärdaten lesen
+            new_string = file2.read()
+
+        print("RootFS Size : " + str( len( new_string ) ) + "  (" + name + ")")
         print("Placeholder : " + str( max_size ) + " (at " + str( index ) + ")")
 
         if len( new_string ) > max_size:
@@ -59,7 +70,7 @@ def kernel_cpio_hack(dev_path, rootfs_img='rootfs.img'):
 
         # Den neuen String schreiben
         file.write(new_string)
-        print("rootfs.img written to kernel image")
+        print(name + " written to kernel image")
 
 
 
@@ -252,7 +263,7 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
     # entscheiden, sondern daran, ob der Aufruf ein -initrd hat und das
     # Image ueberhaupt einen Platzhalter mitbringt.
     if "-initrd" not in infos["CONFIG_QEMU_CMD"] and kernel_has_cpio_marker( dev_path ):
-        kernel_cpio_hack( dev_path, rootfs_img )
+        kernel_cpio_hack( dev_path, rootfs_img, rootfs_xz )
 	
     
 	
