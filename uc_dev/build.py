@@ -37,6 +37,10 @@ def print_line_text( text , big=False, gcc=None, linux=None):
     print("\033[01;33m" + '─' * 25 + " \033[01;32m " + text + " \033[01;33m " + '─' * ( width - 28 -len( text ) )  + "\033[00m")
 
 
+def print_error( text ):
+    print("\033[01;31m" + "error: " + text + "\033[00m")
+
+
 def is_coldfire( infos ):
     # ColdFire needs -mxgot (the 16-bit GOT overflows: "R_68K_GOT16O truncated
     # to fit") and -fno-dwarf2-cfi-asm, like openadk's ADK_TARGET_CPU_CF.
@@ -121,29 +125,41 @@ def run_command( cmd ):
 def config_uclibc( uclibc_src, all_dev_packages ):
 
     if not all_dev_packages:
-        config_dev_pack_uclibc( uclibc_src, options.get_dev_package_name() )
-        return
+        return config_dev_pack_uclibc( uclibc_src, options.get_dev_package_name() )
 
 
     dev_pack_list = options.get_dev_pack_list()
-   
+
+    ok = True
     for dev_pack in dev_pack_list:
-        config_dev_pack_uclibc( uclibc_src , dev_pack )
+        if not config_dev_pack_uclibc( uclibc_src , dev_pack ):
+            ok = False
+
+    return ok
 
 
 
 def build_uclibc( uclibc_src, all_dev_packages ):
-    
-    
+
+
     if not all_dev_packages:
-        build_dev_pack_uclibc( uclibc_src, options.get_dev_package_name() )
-        return
+        return build_dev_pack_uclibc( uclibc_src, options.get_dev_package_name() )
 
 
     dev_pack_list = options.get_dev_pack_list()
-   
+
+    # Bei -a nicht beim ersten Fehler abbrechen -- die uebrigen Arches sind
+    # unabhaengig und sollen gebaut werden -- aber den Fehler bis zum
+    # Rueckgabewert durchreichen und am Ende noch einmal nennen.
+    failed = []
     for dev_pack in dev_pack_list:
-        build_dev_pack_uclibc( uclibc_src , dev_pack )
+        if not build_dev_pack_uclibc( uclibc_src , dev_pack ):
+            failed.append( dev_pack )
+
+    for dev_pack in failed:
+        print_error( "uclibc-ng build failed: " + dev_pack )
+
+    return len( failed ) == 0
 
 
 def prepare_toolchain( dev_pack ):
@@ -277,8 +293,13 @@ def config_dev_pack_uclibc( uclibc_src, dev_pack ):
     
     
     ret = run_command( "make -C " + dev_path + "uclibc-ng menuconfig")
-    
-    
+    if ret != 0:
+        print_error( "menuconfig failed for " + dev_pack + " (make returned " + str( ret ) + ")" )
+        return False
+
+    return True
+
+
 
 def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     
@@ -310,10 +331,14 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
 
     ret = run_command( "make -C " + dev_path + "uclibc-ng -j20" + make_extra )
     if ret != 0:
-        return
+        print_error( "build failed for " + dev_pack + " (make returned " + str( ret ) + ")" )
+        return False
     # dev_path is already absolute; do not prefix os.getcwd() (that produced a
     # doubled path so -r/build_rootfs never saw the freshly installed libs)
     ret = run_command( "make -C " + dev_path + "uclibc-ng" + make_extra + " install DESTDIR=" + dev_path + "sysroot/" )
+    if ret != 0:
+        print_error( "install failed for " + dev_pack + " (make returned " + str( ret ) + ")" )
+        return False
 
     # Mirror z_build_workflow.yml: add lib32/lib64/libx32 -> lib symlinks to the
     # sysroot. gcc looks for startfiles (crt1.o, ...) in the ABI's multilib OS
@@ -351,10 +376,12 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
             print("ld-uClibc: not installed by make install, copied from lib/")
 
     touch( dev_path + "sysroot/.sysroot_installed" )
-   
-    
+
+
     run_command("rm -rf " + dev_path + "/rootfs" )
-        
+
+    return True
+
 
 
 
@@ -389,14 +416,20 @@ def build_rootfs( all_dev_packages, test_list, rebuild_rootfs=False, no_disabled
     
     
     if not all_dev_packages:
-        build_dev_pack_rootfs( options.get_dev_package_name(), test_list, rebuild_rootfs=rebuild_rootfs, no_disabled_tests=no_disabled_tests )
-        return
+        return build_dev_pack_rootfs( options.get_dev_package_name(), test_list, rebuild_rootfs=rebuild_rootfs, no_disabled_tests=no_disabled_tests )
 
 
     dev_pack_list = options.get_dev_pack_list()
-   
+
+    failed = []
     for dev_pack in dev_pack_list:
-        build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=rebuild_rootfs, no_disabled_tests=no_disabled_tests )
+        if not build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=rebuild_rootfs, no_disabled_tests=no_disabled_tests ):
+            failed.append( dev_pack )
+
+    for dev_pack in failed:
+        print_error( "rootfs build failed: " + dev_pack )
+
+    return len( failed ) == 0
         
         
 def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disabled_tests=False ):
@@ -518,7 +551,7 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     
     
     
-    run_command("make -C uclibc-ng-test -j20")
+    testsuite_ret = run_command("make -C uclibc-ng-test -j20")
     run_command("make -C uclibc-ng-test install DESTDIR=../rootfs > /dev/null  2>&1")
 
     run_command("find rootfs -type f -name '*.gdb' -exec rm {} \;")
@@ -784,6 +817,16 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     for t in test_disable:
         os.environ[t] = "0"
     #run_command("env")
-    
-    
+
+
     os.chdir( cur_dir )
+
+    # Der Bau der Testsuite darf nicht still durchgehen: das rootfs entsteht
+    # trotzdem, nur mit weniger Tests darin, und der qemu-Lauf meldet dann eine
+    # kleinere Zahl statt eines Fehlers.
+    if testsuite_ret != 0:
+        print_error( "testsuite build failed for " + dev_pack
+                     + " (make returned " + str( testsuite_ret ) + ")" )
+        return False
+
+    return True

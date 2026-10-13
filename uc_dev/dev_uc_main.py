@@ -114,24 +114,32 @@ def dev_uc_main():
         exit(1)
 
 
+    # Ein gescheiterter Bau muss den Exit-Code setzen. Vorher wurde der
+    # Rueckgabewert von make zwar geprueft, aber nur zum stillen Aussteigen
+    # benutzt: uc_devel meldete 0, und der naechste Schritt linkte gegen die
+    # alte Bibliothek. Aufgefallen ist das zuletzt an einem neuen Eintrag in
+    # der Target-Choice, der kconfig interaktiv nachfragen liess.
     if args.config_uclibc:
         if options.get_uclibc_repo() == "":
             print("set uclibc-ng src with --uclibc_src")
             exit(1)
-            
-        build.config_uclibc( options.get_uclibc_repo(), args.all_archs )
+
+        if not build.config_uclibc( options.get_uclibc_repo(), args.all_archs ):
+            exit(1)
 
     if args.build_uclibc:
-        
+
         if options.get_uclibc_repo() == "":
             print("set uclibc-ng src with --uclibc_src")
             exit(1)
-        
-        build.build_uclibc( options.get_uclibc_repo(), args.all_archs )
 
-    
+        if not build.build_uclibc( options.get_uclibc_repo(), args.all_archs ):
+            exit(1)
+
+
     if args.build_rootfs:
-        build.build_rootfs( args.all_archs, args.test_list, no_disabled_tests=args.all_tests )
+        if not build.build_rootfs( args.all_archs, args.test_list, no_disabled_tests=args.all_tests ):
+            exit(1)
 
     if args.run_qemu:
         qemu.run_qemu( args.system_qemu, shell=args.shell, kernel=args.kernel, memory=args.memory )
