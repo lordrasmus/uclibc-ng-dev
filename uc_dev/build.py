@@ -271,15 +271,74 @@ def prepare_uclibc( uclibc_src, dev_pack ):
     if not os.path.exists( dev_path+"uclibc-ng/.config" ):
         print_line_text("copy default uclibc-ng config" )
         dev_package.write_dev_pack_file( "files/uclibc-ng-config", dev_path+"uclibc-ng/.config", dev_pack )
-        
+
         cmd = "sed -i 's|KERNEL_HEADERS=.*|KERNEL_HEADERS=\"" + dev_path + "/sysroot/usr/include\"|g' " + dev_path +  "uclibc-ng/.config"
         run_command( cmd )
-        # olddefconfig statt oldconfig: nimmt Defaults fuer neue Optionen,
-        # damit der Build nie auf einen interaktiven Prompt wartet
-        run_command( "make -C " + dev_path + "uclibc-ng olddefconfig")
-    
-    
+
+    # Vor JEDEM Bau, nicht nur beim Anlegen. Die .config des Packs beantwortet
+    # die Symbole, die es beim CI-Bau gab; der Quell-Tree aus --uclibc_src
+    # wandert davon unabhaengig weiter. Kommt dort ein Symbol dazu -- etwa ein
+    # neuer Port in der Target-Choice -- steht in der .config keine Antwort
+    # dafuer, und kconfig will beim Erzeugen von include/bits/uClibc_config.h
+    # fragen: "Restart config...". Unter < /dev/null bricht make dann ab,
+    # interaktiv bleibt der Bau stehen.
+    # olddefconfig statt oldconfig: vorhandene Antworten bleiben unangetastet,
+    # nur neue Symbole bekommen ihren Default, der Bau wartet also nie.
+    before = read_kconfig( dev_path + "uclibc-ng/.config" )
+    run_command( "make -C " + dev_path + "uclibc-ng olddefconfig" )
+    report_kconfig_changes( before, read_kconfig( dev_path + "uclibc-ng/.config" ) )
+
     return dev_path
+
+
+def read_kconfig( path ):
+    """Liest eine .config als {Symbol: Wert}. '# FOO is not set' wird zu n."""
+
+    values = {}
+    if not os.path.exists( path ):
+        return values
+
+    with open( path ) as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("# ") and line.endswith(" is not set"):
+                values[ line[2:-11] ] = "n"
+            elif "=" in line and not line.startswith("#"):
+                name, _, value = line.partition("=")
+                values[ name ] = value
+
+    return values
+
+
+def report_kconfig_changes( before, after ):
+    """Sagt, was olddefconfig entschieden hat.
+
+    Ohne das waere die Entscheidung unsichtbar: eine neue Option bekaeme still
+    ihren Default, und niemand erfuehre davon -- auch dann nicht, wenn sie uns
+    nicht egal ist.  KERNEL_HEADERS bleibt draussen, das schreiben wir selbst.
+    """
+
+    changes = []
+    for name in sorted( set( before ) | set( after ) ):
+        if name == "KERNEL_HEADERS":
+            continue
+        old = before.get( name )
+        new = after.get( name )
+        if old == new:
+            continue
+        if old is None:
+            changes.append( "  neu       " + name + "=" + new )
+        elif new is None:
+            changes.append( "  entfallen " + name )
+        else:
+            changes.append( "  geaendert " + name + ": " + old + " -> " + new )
+
+    if len( changes ) == 0:
+        return
+
+    print_line_text( "olddefconfig hat die .config geaendert" )
+    for c in changes:
+        print( "\033[01;33m" + c + "\033[00m" )
     
 
 def config_dev_pack_uclibc( uclibc_src, dev_pack ):
