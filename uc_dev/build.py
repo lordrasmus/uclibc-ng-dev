@@ -272,8 +272,15 @@ def prepare_uclibc( uclibc_src, dev_pack ):
         print_line_text("copy default uclibc-ng config" )
         dev_package.write_dev_pack_file( "files/uclibc-ng-config", dev_path+"uclibc-ng/.config", dev_pack )
 
-        cmd = "sed -i 's|KERNEL_HEADERS=.*|KERNEL_HEADERS=\"" + dev_path + "/sysroot/usr/include\"|g' " + dev_path +  "uclibc-ng/.config"
-        run_command( cmd )
+    # Vor JEDEM Bau, nicht nur beim Anlegen: der Wert ist ein absoluter Pfad
+    # auf genau dieses Dev-Verzeichnis. Eine .config, die aelter ist als diese
+    # Zeile oder aus dem Pack selbst stammt, traegt den Pfad des CI-Bauers
+    # ("linux-headers/include"), und der zeigt hier ins Leere. make bricht dann
+    # beim Erzeugen von include/bits/sysnum.h mit "Could not generate syscalls"
+    # ab -- das sieht nach fehlenden Kernel-Headern aus und nicht nach einer
+    # stale Einstellung, und das Dev-Pack baut nie wieder.
+    cmd = "sed -i 's|KERNEL_HEADERS=.*|KERNEL_HEADERS=\"" + dev_path + "/sysroot/usr/include\"|g' " + dev_path +  "uclibc-ng/.config"
+    run_command( cmd )
 
     # Vor JEDEM Bau, nicht nur beim Anlegen. Die .config des Packs beantwortet
     # die Symbole, die es beim CI-Bau gab; der Quell-Tree aus --uclibc_src
