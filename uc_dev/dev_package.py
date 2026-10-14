@@ -216,7 +216,7 @@ def list_dev_file_content( dev_pack ):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         
-def get_dev_file_content( name, dev_pack ):
+def get_dev_file_content( name, dev_pack, quiet=False ):
     #print( dev_pack )
     try:
         dev_tar = options.get_dev_package_tar( dev_pack )
@@ -234,13 +234,18 @@ def get_dev_file_content( name, dev_pack ):
             tar_name = "devel_pack_" + dev_pack + "/" + name
             
             return tar.extractfile(tar_name).read()
-             
+
     except FileNotFoundError:
-        print("The file {0} was not found.".format( options.get_dev_package_tar( dev_pack ) ))
+        if not quiet:
+            print("The file {0} was not found.".format( options.get_dev_package_tar( dev_pack ) ))
     except tarfile.TarError as e:
-        print(f"Error processing the TAR archive: {e}")
+        if not quiet:
+            print(f"Error processing the TAR archive: {e}")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        # quiet: der Aufrufer fragt nach einer Datei, die aeltere Packs nicht
+        # haben, und behandelt das None selbst.
+        if not quiet:
+            print(f"An unexpected error occurred: {e}")
     
     
 

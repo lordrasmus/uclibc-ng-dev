@@ -2,6 +2,7 @@
 
 import os
 import sys
+import gzip
 import select
 import signal
 import subprocess
@@ -22,7 +23,39 @@ def kernel_has_cpio_marker(dev_path):
         return file.read().find( MARKER ) != -1
 
 
-def kernel_cpio_hack(dev_path, rootfs_img='rootfs.img', rootfs_xz=None):
+def make_rootfs_gz( src, dst ):
+    # Nur neu packen, wenn das Rohbild juenger ist -- das cpio ist gross und
+    # der Lauf wiederholt sich oft.
+    if os.path.exists( dst ) and os.path.getmtime( dst ) >= os.path.getmtime( src ):
+        return
+    with open( src, "rb" ) as fin, gzip.GzipFile( dst, "wb", compresslevel=9, mtime=0 ) as fout:
+        while True:
+            chunk = fin.read( 1 << 20 )
+            if not chunk:
+                break
+            fout.write( chunk )
+
+
+def kernel_rd_formats( dev_pack ):
+    # Welche Dekompressoren der Kernel des Packs mitbringt, aus seiner
+    # kernel.config gelesen (die liegt im Pack-Tar, entpackt wird sie nicht).
+    # None heisst "nicht feststellbar" -- aeltere Packs haben die Datei nicht.
+    try:
+        cfg = dev_package.get_dev_file_content( "files/kernel.config", dev_pack, quiet=True )
+    except Exception:
+        return None
+    if cfg is None:
+        return None
+
+    cfg = cfg.decode( "utf-8", "replace" )
+    formats = set()
+    for opt, name in ( ("CONFIG_RD_GZIP", "gzip"), ("CONFIG_RD_XZ", "xz") ):
+        if opt + "=y" in cfg:
+            formats.add( name )
+    return formats
+
+
+def kernel_cpio_hack(dev_path, dev_pack, rootfs_img='rootfs.img', rootfs_xz=None):
     # Öffnen der Binärdatei im Schreibmodus
     with open( dev_path + 'kernel.img', 'r+b') as file:
         # Binärdaten lesen
@@ -43,16 +76,50 @@ def kernel_cpio_hack(dev_path, rootfs_img='rootfs.img', rootfs_xz=None):
             end += 1
         max_size = end - index
 
-        # Passt das rohe cpio nicht, das gepackte nehmen: unpack_to_rootfs()
+        # Passt das rohe cpio nicht, ein gepacktes nehmen: unpack_to_rootfs()
         # laesst decompress_method() ueber den eingebauten Blob laufen und
-        # ueberspringt die Nullen dahinter, ein xz-Rootfs ist also genauso
-        # gueltig. Der sparc-leon3-Kernel traegt deshalb nur 16 MB Platzhalter
-        # -- roh braeuchte dasselbe Rootfs 80, weil der Linker jedes
-        # Datensegment auf 64K ausrichtet und 86% der Datei Nullen sind.
+        # ueberspringt die Nullen dahinter. Der sparc-leon3-Kernel traegt
+        # deshalb nur 16 MB Platzhalter -- roh braeuchte dasselbe Rootfs 80,
+        # weil der Linker jedes Datensegment auf 64K ausrichtet und 86% der
+        # Datei Nullen sind.
+        #
+        # Nur ein Format nehmen, das der Kernel auch auspacken kann. Blind xz
+        # zu waehlen laesst einen Kernel ohne CONFIG_RD_XZ (m68k-cf5208 etwa)
+        # ohne eine einzige Logzeile sterben -- qemu ist weg, log.txt leer,
+        # und nichts deutet auf das Rootfs.
+        formats = kernel_rd_formats( dev_pack )
+        tried = []
+
         name = rootfs_img
-        if os.path.getsize( dev_path + name ) > max_size and rootfs_xz is not None \
-           and os.path.exists( dev_path + rootfs_xz ):
-            name = rootfs_xz
+        if os.path.getsize( dev_path + name ) > max_size:
+            tried.append( name )
+            name = None
+
+            if formats is None or "gzip" in formats:
+                gz = rootfs_img + ".gz"
+                make_rootfs_gz( dev_path + rootfs_img, dev_path + gz )
+                if os.path.getsize( dev_path + gz ) <= max_size:
+                    name = gz
+                else:
+                    tried.append( gz )
+
+            if name is None and rootfs_xz is not None \
+               and os.path.exists( dev_path + rootfs_xz ) \
+               and ( formats is None or "xz" in formats ):
+                name = rootfs_xz
+
+            if name is None:
+                print("RootFS passt in keinem Format in den Platzhalter (" \
+                      + str( max_size ) + " Byte)")
+                for t in tried:
+                    print("   " + t + " : " + str( os.path.getsize( dev_path + t ) ))
+                if formats is not None:
+                    print("   Kernel kann auspacken : " \
+                          + ( ", ".join( sorted( formats ) ) if formats else "nichts" ))
+                exit(1)
+
+            if formats is None:
+                print("   Warnung: kernel.config fehlt im Pack, Format ungeprueft")
 
         with open(dev_path + name, 'rb') as file2:
             # Binärdaten lesen
@@ -263,7 +330,7 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
     # entscheiden, sondern daran, ob der Aufruf ein -initrd hat und das
     # Image ueberhaupt einen Platzhalter mitbringt.
     if "-initrd" not in infos["CONFIG_QEMU_CMD"] and kernel_has_cpio_marker( dev_path ):
-        kernel_cpio_hack( dev_path, rootfs_img, rootfs_xz )
+        kernel_cpio_hack( dev_path, dev_pack, rootfs_img, rootfs_xz )
 	
     
 	
