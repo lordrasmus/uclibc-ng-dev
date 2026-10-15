@@ -56,6 +56,15 @@ def cf_flags( infos ):
     return " -mxgot -fno-dwarf2-cfi-asm" if is_coldfire( infos ) else ""
 
 
+def embeds_rootfs( infos ):
+    # These kernels carry the rootfs in a fixed slot (the cpio hack): ~17 MB
+    # for xtensa/kvx/csky/arc, 24 MB in the ColdFire ELF image. Same test as
+    # z_images_workflow.yml, which skips the -O2 twins and strips there.
+    if infos.get("CONFIG_KERNEL_ARCH") in ( "xtensa", "kvx", "csky", "arc" ):
+        return True
+    return "mcf5208" in infos.get("CONFIG_QEMU_CMD", "") and infos.get("UCLIBC_FORMAT_ELF") == "y"
+
+
 def config_has( needle, path="uclibc-ng/.config" ):
     """True if the built uClibc-ng config contains this exact line."""
     try:
@@ -685,10 +694,16 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     
     
     
-    testsuite_ret = run_command("make -C uclibc-ng-test -j20")
-    run_command("make -C uclibc-ng-test install DESTDIR=../rootfs > /dev/null  2>&1")
+    slot = embeds_rootfs( infos )
+    mk_flags = " O2_TWINS=0" if slot else ""
+    testsuite_ret = run_command("make -C uclibc-ng-test -j20" + mk_flags)
+    run_command("make -C uclibc-ng-test install DESTDIR=../rootfs" + mk_flags + " > /dev/null  2>&1")
 
     run_command("find rootfs -type f -name '*.gdb' -exec rm {} \;")
+    if slot:
+        # strip refuses the scripts and FLAT files and leaves them as they are
+        run_command("find rootfs/usr/lib/uclibc-ng-test -type f -exec " + infos["CONFIG_GCC_PREFIX"]
+                    + "strip --strip-unneeded {} + 2>/dev/null")
     
     with open( "rootfs/etc/ethers", "w") as f:
         f.write("08:00:20:00:61:CA  pal\n")
