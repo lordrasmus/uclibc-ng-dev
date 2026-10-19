@@ -4,6 +4,7 @@ import sys
 import glob
 import json
 import subprocess
+import time
 
 from pprint import pprint
 
@@ -541,6 +542,54 @@ def build_rootfs( all_dev_packages, test_list, rebuild_rootfs=False, no_disabled
     return len( failed ) == 0
         
         
+TEST_MANIFEST = ".uc_dev_files"
+
+
+def remove_dropped_test_files( dest, files ):
+    # rsync --files-from loescht nichts. Ein im Testbaum geloeschter oder
+    # umbenannter Test blieb deshalb als .c in der Kopie liegen, und
+    # Test.mak (TESTS := $(wildcard *.c)) baute und startete ihn weiter.
+    # Abhilfe: die Liste des letzten Syncs aufheben und entfernen, was
+    # seitdem wegfiel -- samt den Bauprodukten des Tests.
+    manifest = dest + "/" + TEST_MANIFEST
+    if not os.path.exists( dest ):
+        return
+    if not os.path.exists( manifest ):
+        # Kopie von vor dem Manifest: was darin veraltet ist, weiss niemand.
+        # Einmal frisch anlegen; einen git-Klon nur beiseitelegen, er kann
+        # lokale Aenderungen tragen.
+        if os.path.exists( dest + "/.git" ):
+            aside = dest + ".clone-" + time.strftime("%Y%m%d-%H%M%S")
+            print("uclibc-ng-test: Klon nach " + aside + " verschoben")
+            os.rename( dest, aside )
+        else:
+            run_command("rm -rf " + dest)
+        return
+
+    with open( manifest ) as f:
+        old = set( l for l in f.read().split("\n") if l != "" )
+    new = set( files )
+    new_dirs = set( os.path.dirname( f ) for f in new )
+
+    for d in sorted( set( os.path.dirname( f ) for f in old ) - new_dirs ):
+        if d != "" and os.path.isdir( dest + "/" + d ):
+            print("uclibc-ng-test: entferne " + d + "/")
+            run_command("rm -rf " + dest + "/" + d)
+
+    for f in sorted( old - new ):
+        if os.path.dirname( f ) not in new_dirs:
+            continue
+        print("uclibc-ng-test: entferne " + f)
+        victims = [ f ]
+        if f.endswith(".c"):
+            stem = f[:-2]
+            for b in ( stem, stem + "-O2", stem + "_glibc" ):
+                victims += [ b, b + ".o", b + ".d", b + ".out" ]
+        for v in victims:
+            if os.path.lexists( dest + "/" + v ):
+                os.remove( dest + "/" + v )
+
+
 def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disabled_tests=False ):
     
     
@@ -629,13 +678,15 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         files = [ f for f in tracked + untracked
                   if not f.endswith((".d", ".o", ".out")) ]
         
+        remove_dropped_test_files( "uclibc-ng-test", files )
+
         with open("uclibc-ng-test.files", "w") as f:
             f.write("\n".join( files ) + "\n")
-        
+
         run_command("mkdir -p uclibc-ng-test")
         run_command("rsync -a --no-times --files-from=uclibc-ng-test.files " + test_src + "/ uclibc-ng-test/")
-        
-        os.remove("uclibc-ng-test.files")
+
+        os.replace("uclibc-ng-test.files", "uclibc-ng-test/" + TEST_MANIFEST)
         
     elif not os.path.exists("uclibc-ng-test/.installed"):
         print_line_text("clone uclibc-ng-test")
