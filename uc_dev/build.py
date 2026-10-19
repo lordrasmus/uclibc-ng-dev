@@ -221,37 +221,70 @@ def prepare_toolchain( dev_pack ):
     
     return dev_path
 
+def uclibc_make( uclibc_src, dev_path ):
+    return "make -C " + uclibc_src + " O=" + dev_path + "uclibc-ng"
+
+
+def check_clean_source( uclibc_src ):
+    # Ein In-tree-Bau hinterlaesst generierte Dateien im Quellbaum, und die
+    # gewinnen auch bei O= : '#include "ucontext_i.h"' sucht zuerst neben der
+    # .S-Datei, vor jedem -I. Ein x86_64-ucontext_i.h von 2023 landete so in
+    # jedem spaeteren x86_64-Bau. Deshalb nicht bauen, solange so etwas da ist.
+    # Host-Werkzeuge von kconfig (extra/config/) sind harmlos, O= baut eigene.
+    ret, out = subprocess.getstatusoutput( "git -C " + uclibc_src
+        + " ls-files --others --ignored --exclude-standard" )
+    if ret != 0:
+        print("\033[01;33m" + uclibc_src + " ist kein git-Baum, Pruefung auf"
+              " In-tree-Bauprodukte uebersprungen\033[00m")
+        return True
+    suffixes = ( ".o", ".os", ".oS", ".a", ".so", ".h", ".dep" )
+    stale = [ f for f in out.splitlines()
+              if not f.startswith( ( "extra/config/", "qemu-inst/" ) )
+              and ( f.endswith( suffixes ) or ".so." in f ) ]
+    if not stale:
+        return True
+    print_error( uclibc_src + " enthaelt Bauprodukte eines In-tree-Baus:" )
+    for f in stale[:20]:
+        print("    " + f)
+    if len( stale ) > 20:
+        print("    ... und " + str( len( stale ) - 20 ) + " weitere")
+    print("Entfernen mit:  make -C " + uclibc_src + " distclean"
+          "   (oder ansehen: git -C " + uclibc_src + " clean -X -n)")
+    return False
+
+
+def migrate_copied_tree( build_dir ):
+    # Dev-Verzeichnisse von vor der O=-Umstellung enthalten eine Kopie des
+    # Quellbaums. Die muss weg: -I$(top_builddir)include steht vor srcdir,
+    # alte Header dort wuerden die echten verdecken. .config bleibt erhalten.
+    if not os.path.exists( build_dir + "/Makefile" ):
+        return
+    print_line_text("remove copied uclibc-ng source tree (now built with O=)")
+    config = None
+    if os.path.exists( build_dir + "/.config" ):
+        with open( build_dir + "/.config" ) as f:
+            config = f.read()
+    run_command( "rm -rf " + build_dir )
+    os.makedirs( build_dir )
+    if config is not None:
+        with open( build_dir + "/.config", "w" ) as f:
+            f.write( config )
+
+
 def prepare_uclibc( uclibc_src, dev_pack ):
 
     infos = dev_package.get_dev_infos( dev_pack )
     
     dev_path = prepare_toolchain( dev_pack )
 
-    print_line_text("rsync uclibc-ng code" )
-    # Nur reinen Quellcode importieren. Der geteilte Quell-Tree wird oft in-tree
-    # gebaut (build.py) und traegt dann Fremd-Arch-Build-Artefakte; die NICHT
-    # mitkopieren, sonst landen falsche .os/.a/.so im Build-Dir.
-    obj_excludes = "--exclude '*.os' --exclude '*.o' --exclude '*.oS' --exclude '*.a' --exclude '*.so' --exclude '*.so.*'"
-    # --no-times: die mtimes des Quell-Trees NICHT uebernehmen. Sonst kommt eine
-    # inhaltlich neue Datei mit altem Stempel an und ist damit aelter als die im
-    # Dev-Pack schon gebauten Artefakte -> make sieht "nichts zu tun". Getroffen hat
-    # das die Locale-Generatoren: gen_ldc blieb stehen und schrieb locale_data.c in
-    # der alten Tabellenanordnung (abgeschnittener Blob -> assert in locale.c).
-    # Preis: jedes Kopieren setzt die aktuelle Zeit, der naechste Build ist also voll.
-    cmd = "rsync --info=progress2 -a --no-times --exclude '.config' " + obj_excludes + " " +  uclibc_src + "/* " + dev_path+ "uclibc-ng/"
-    run_command( cmd )
-
-    # Generierte Header-Symlink-Farm wegwerfen: sie zeigt auf die zuletzt in-tree
-    # gebaute Arch (z.B. include/sys/ucontext.h -> .../nds32/...). uClibcs Regel hat
-    # keine Prerequisites und refresht existierende Symlinks nicht -> make wuerde den
-    # falschen Link behalten. Getrackte echte Header sind regulaere Dateien, keine
-    # Symlinks, bleiben also erhalten. Entspricht headers_clean (Makefile.in).
-    run_command( "find " + dev_path + "uclibc-ng/include/ -type l -delete" )
-    # Generierte REGULAERE Header ebenso wegwerfen (kein Symlink, vom find oben nicht
-    # erfasst): bits/sysnum.h wird aus den Kernel-Headern erzeugt; einer stale Kopie aus
-    # dem Quell-Tree fehlt z.B. __NR_getrandom -> getrandom() faellt weg -> busybox
-    # (seedrng) linkt nicht. make regeneriert sie passend zur aktuellen Header-Version.
-    run_command( "rm -f " + dev_path + "uclibc-ng/include/bits/sysnum.h" )
+    # Out-of-tree: die Quellen bleiben in uclibc_src, dev_path/uclibc-ng nimmt nur
+    # .config und Bauprodukte auf (make O=). Frueher wurde der Quellbaum per rsync
+    # hineinkopiert; geloeschte Dateien blieben dabei liegen (m68k/float.h), und
+    # Bauprodukte des Quellbaums wanderten mit (Symlink-Farm, sysnum.h).
+    if not check_clean_source( uclibc_src ):
+        return None
+    migrate_copied_tree( dev_path + "uclibc-ng" )
+    os.makedirs( dev_path + "uclibc-ng", exist_ok=True )
 
 
     if not os.path.exists( dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] +"/.installed" ):
@@ -301,7 +334,7 @@ def prepare_uclibc( uclibc_src, dev_pack ):
     # olddefconfig statt oldconfig: vorhandene Antworten bleiben unangetastet,
     # nur neue Symbole bekommen ihren Default, der Bau wartet also nie.
     before = read_kconfig( dev_path + "uclibc-ng/.config" )
-    run_command( "make -C " + dev_path + "uclibc-ng olddefconfig" )
+    run_command( uclibc_make( uclibc_src, dev_path ) + " olddefconfig" )
     report_kconfig_changes( before, read_kconfig( dev_path + "uclibc-ng/.config" ) )
 
     return dev_path
@@ -365,9 +398,10 @@ def config_dev_pack_uclibc( uclibc_src, dev_pack ):
     
     
     dev_path = prepare_uclibc( uclibc_src, dev_pack )
-    
-    
-    ret = run_command( "make -C " + dev_path + "uclibc-ng menuconfig")
+    if dev_path is None:
+        return False
+
+    ret = run_command( uclibc_make( uclibc_src, dev_path ) + " menuconfig")
     if ret != 0:
         print_error( "menuconfig failed for " + dev_pack + " (make returned " + str( ret ) + ")" )
         return False
@@ -387,9 +421,9 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     print_line_text("building uclibc-ng " + dev_pack, big=True , gcc="GCC   : " + infos["GCC"], linux="Linux : " + infos["CONFIG_KERNEL_VERS"])
     
     dev_path = prepare_uclibc( uclibc_src, dev_pack )
-    
-    
-    
+    if dev_path is None:
+        return False
+
     # FLAT (bFLT) builds need -Wl,-elf2flt=-r at link time. For rv32/rv64
     # the compiler additionally needs -fPIC so the linker emits
     # R_RISCV_RELATIVE for GOT slots — without it elf2flt has no source
@@ -404,13 +438,13 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
     extra = ( extra + cf_flags( infos ) ).strip()
     make_extra = " UCLIBC_EXTRA_CFLAGS='" + extra + "'" if extra else ""
 
-    ret = run_command( "make -C " + dev_path + "uclibc-ng -j20" + make_extra )
+    ret = run_command( uclibc_make( uclibc_src, dev_path ) + " -j20" + make_extra )
     if ret != 0:
         print_error( "build failed for " + dev_pack + " (make returned " + str( ret ) + ")" )
         return False
     # dev_path is already absolute; do not prefix os.getcwd() (that produced a
     # doubled path so -r/build_rootfs never saw the freshly installed libs)
-    ret = run_command( "make -C " + dev_path + "uclibc-ng" + make_extra + " install DESTDIR=" + dev_path + "sysroot/" )
+    ret = run_command( uclibc_make( uclibc_src, dev_path ) + make_extra + " install DESTDIR=" + dev_path + "sysroot/" )
     if ret != 0:
         print_error( "install failed for " + dev_pack + " (make returned " + str( ret ) + ")" )
         return False
