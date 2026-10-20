@@ -818,6 +818,10 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         # /tmp as tmpfs: the rootfs is an initramfs (ramfs) which has no
         # fallocate support, so tst-fallocate/tst-posix_fallocate fail there.
         f.write("::sysinit:/bin/mount -t tmpfs none /tmp\n")
+        # /dev/shm for shm_open(), which keeps its objects there; devtmpfs
+        # does not provide it.
+        f.write("::sysinit:/bin/mkdir -p /dev/shm\n")
+        f.write("::sysinit:/bin/mount -t tmpfs none /dev/shm\n")
         f.write("::sysinit:/bin/dmesg -n1\n")
         f.write("::sysinit:/bin/hostname Qemu\n")
         f.write("::sysinit:/bin/echo 'test console' > /dev/console\n")
