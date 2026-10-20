@@ -50,6 +50,8 @@ class TqdmUpTo(tqdm):
 def download_with_progress(url, destination):
     
     destination_tmp = destination+".dl"
+    # cache/downloads/ does not exist yet on a fresh work dir
+    os.makedirs( os.path.dirname( destination ), exist_ok=True )
     with TqdmUpTo(unit='B', unit_scale=True, unit_divisor=1024, miniters=1, desc=os.path.basename(destination)) as t:  # all optional kwargs
         urllib.request.urlretrieve( url, filename=destination_tmp, reporthook=t.update_to, data=None)
         t.total = t.n

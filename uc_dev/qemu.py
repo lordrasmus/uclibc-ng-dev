@@ -291,10 +291,13 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
             build.print_line_text("download qemu")
             dev_package.download_with_progress("https://raw.githubusercontent.com/lordrasmus/uclibc-ng-qemu-imgs/main/qemu-inst.tar.xz", options.get_download_dir() + "/qemu-inst.tar.xz")
 
-        if not os.path.exists( "qemu-inst/.installed"):
+        # Into the work dir, not the cwd: the command below runs it as
+        # ../qemu-inst from the dev pack directory.
+        qemu_inst = options.get_work_dir() + "qemu-inst"
+        if not os.path.exists( qemu_inst + "/.installed"):
             build.print_line_text("extract qemu")
-            build.run_command("tar -xaf " + options.get_download_dir() + "/qemu-inst.tar.xz")
-            build.touch("qemu-inst/.installed")
+            build.run_command("tar -xaf " + options.get_download_dir() + "/qemu-inst.tar.xz -C " + options.get_work_dir())
+            build.touch( qemu_inst + "/.installed")
 
 
     # Must match build.py's prepare_uclibc/prepare_toolchain, which build
