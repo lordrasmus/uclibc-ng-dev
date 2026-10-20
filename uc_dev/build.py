@@ -817,44 +817,13 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     with open( "rootfs/etc/hostname", "w") as f:
         f.write("Qemu\n")
 
-    with open( "rootfs/etc/inittab", "w") as f:
-
-        f.write("::sysinit:/bin/mount -t devtmpfs none /dev\n")
-        f.write("::sysinit:/bin/mount -t proc none /proc\n")
-        f.write("::sysinit:/bin/mount -t sysfs none /sys\n")
-        # /tmp as tmpfs: the rootfs is an initramfs (ramfs) which has no
-        # fallocate support, so tst-fallocate/tst-posix_fallocate fail there.
-        f.write("::sysinit:/bin/mount -t tmpfs none /tmp\n")
-        # /dev/shm for shm_open(), which keeps its objects there; devtmpfs
-        # does not provide it.
-        f.write("::sysinit:/bin/mkdir -p /dev/shm\n")
-        f.write("::sysinit:/bin/mount -t tmpfs none /dev/shm\n")
-        f.write("::sysinit:/bin/dmesg -n1\n")
-        f.write("::sysinit:/bin/hostname Qemu\n")
-        f.write("::sysinit:/bin/echo 'test console' > /dev/console\n")
-        f.write("::sysinit:/bin/echo 'test ttyS0' > /dev/ttyS0\n")
-
-        f.write("console::sysinit:/bin/run_tests.sh\n")
-        #f.write("console::respawn:/bin/sh\n")
-        f.write("console::respawn:/sbin/getty -n -L -t 360 console 0 xterm-256color\n")
-
-        """
-        Usage: getty [OPTIONS] BAUD_RATE[,BAUD_RATE]... TTY [TERMTYPE]
-
-        Open TTY, prompt for login name, then invoke /bin/login
-
-                -h              Enable hardware RTS/CTS flow control
-                -L              Set CLOCAL (ignore Carrier Detect state)
-                -m              Get baud rate from modem's CONNECT status message
-                -n              Don't prompt for login name
-                -w              Wait for CR or LF before sending /etc/issue
-                -i              Don't display /etc/issue
-                -f ISSUE_FILE   Display ISSUE_FILE instead of /etc/issue
-                -l LOGIN        Invoke LOGIN instead of /bin/login
-                -t SEC          Terminate after SEC if no login name is read
-                -I INITSTR      Send INITSTR before anything else
-                -H HOST         Log HOST into the utmp file as the hostname
-        """        
+    # No inittab and no run_tests.sh: the test runner is /init (see below)
+    # and does their work itself.  Left over in an older rootfs, they would
+    # only mislead.
+    for stale in ( "rootfs/etc/inittab", "rootfs/bin/run_tests.sh" ):
+        if os.path.exists( stale ):
+            os.remove( stale )
+        
 
     if not test_list == None:
 
@@ -905,42 +874,6 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     run_command("mv rootfs/usr/lib/uclibc-ng-test/test/uclibcng-testrunner.in.sort rootfs/usr/lib/uclibc-ng-test/test/uclibcng-testrunner.in")
         
 
-    #cp tests_disable rootfs
-    with open( "rootfs/bin/run_tests.sh", "w") as f:
-        f.write("#!/bin/sh\n")
-        # Kernel soll bei fatalen Signalen (SEGV etc.) den Register-Dump
-        # auf die Konsole drucken - print_fatal_signal() loggt mit KERN_INFO,
-        # also Console-Loglevel anheben (inittab setzt dmesg -n1)
-        f.write("echo 1 > /proc/sys/kernel/print-fatal-signals\n")
-        f.write("dmesg -n8\n")
-        # Der Initramfs-Rootfs ist ein tmpfs mit der Vorgabe "halbes RAM". Auf
-        # sh4/r2d (feste 64 MB, -m wird verworfen) sind das 29 MB, und das
-        # Rootfs belegt davon 27,7 -- 1,3 MB Luft fuer alle .out-Dateien. Geht
-        # die aus, scheitern Schreibzugriffe mit ENOSPC, und ein Lesezugriff auf
-        # ein Loch in einer tmpfs-Datei liefert SIGBUS (so stirbt mmap2). Die
-        # Grenze ist willkuerlich: das Rootfs liegt ohnehin im RAM, ~30 MB
-        # bleiben frei. Hochsetzen kostet also nichts.
-        f.write("mount -o remount,size=90% / 2>/dev/null\n")
-        f.write("df -h / | tail -1\n")
-        #f.write("echo -n 'Disabled Tests : ' ; cat /tests_disable"                     >> rootfs/bin/run_tests.sh
-        f.write("cd /usr/lib/uclibc-ng-test/test/\n")
-        text = "tests_start"
-        width  = 110
-        f.write("echo -e '\033[01;33m" + '─' * 25 + " \033[01;32m " + text + " \033[01;33m " + '─' * ( width - 28 -len( text ) )  + "\033[00m'\n")
-        #f.write("echo '-------------------- tests_start ------------------------'\n")
-        # The C runner, -c for the coloured result and the padded subdir column
-        # -- what uclibcng-testrunner_color.sh printed. It also emits a
-        # "TIME <name> <ms>" line per test.
-        f.write("./uclibcng-testrunner -c\n")
-        text = "tests_end"
-        f.write("echo -e '\033[01;33m" + '─' * 25 + " \033[01;32m " + text + " \033[01;33m " + '─' * ( width - 28 -len( text ) )  + "\033[00m'\n")
-        #f.write("echo '-------------------- tests_end --------------------------'\n")
-        f.write("echo ''\n")
-        f.write("echo 'run reboot or shutdown to quit qemu'\n")
-        f.write("echo ''\n")
-        f.write("echo 'login -> root , no password'\n")
-        f.write("echo ''\n")
-    run_command("chmod 777 rootfs/bin/run_tests.sh")
 
 
     if not os.path.exists( options.get_download_dir() + "/busybox-1.36.1.tar.bz2" ):
@@ -954,9 +887,34 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
 
 
     
-    if not os.path.exists( "busybox-1.36.1/.config"):
-        print_line_text("busybox defconfig")
-        run_command("make -C busybox-1.36.1/ defconfig > /dev/null")
+    # Only what the guest still runs: the shell for popen(), system() and
+    # posix_spawn() in the tests, ls and true for the vfork tests, and reboot
+    # for leaving the --shell session.  init, getty and login are gone with
+    # the runner as /init.  On riscv32 noMMU that is 145 KB instead of the
+    # 1.1 MB of defconfig, and every exec of it a 256 KB block instead of 2 MB.
+    # The marker replaces a defconfig .config left by an older uc_devel.
+    if not os.path.exists( "busybox-1.36.1/.config.minimal"):
+        print_line_text("busybox minimal config")
+        run_command("make -C busybox-1.36.1/ allnoconfig > /dev/null")
+        opts = [ "LFS",         # uClibc-ng forces a 64 bit off_t
+                 "LS", "TRUE", "ECHO", "TEST", "KILL", "REBOOT", "POWEROFF",
+                 "FEATURE_EDITING" ]
+        if infos["UCLIBC_MMU"] == "No":
+            opts += [ "SHELL_HUSH", "HUSH", "SH_IS_HUSH", "HUSH_INTERACTIVE",
+                      "HUSH_ECHO", "HUSH_TEST", "HUSH_READ", "HUSH_KILL",
+                      "HUSH_EXPORT", "HUSH_TRAP" ]
+        else:
+            # ASH_INTERNAL_GLOB: ash refuses uClibc's glob() at build time
+            opts += [ "SHELL_ASH", "ASH", "SH_IS_ASH", "ASH_ECHO", "ASH_TEST",
+                      "ASH_INTERNAL_GLOB" ]
+        for o in opts:
+            replace_line( "# CONFIG_" + o + " is not set", "CONFIG_" + o + "=y", "busybox-1.36.1/.config" )
+        # the applet links of a defconfig busybox, now pointing nowhere
+        run_command("find rootfs -type l -lname '*busybox' -delete")
+        for m in ( "rootfs/.busybox_build", "rootfs/.busybox_installed" ):
+            if os.path.exists( m ):
+                os.remove( m )
+        touch( "busybox-1.36.1/.config.minimal" )
     
     replace_line('CONFIG_CROSS_COMPILER_PREFIX=""','CONFIG_CROSS_COMPILER_PREFIX="' + infos["CONFIG_GCC_PREFIX"] + '"', "busybox-1.36.1/.config")
     
@@ -1024,7 +982,7 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
             replace_line('CONFIG_EXTRA_LDFLAGS=', 'CONFIG_EXTRA_LDFLAGS="' + cf + '"'      , "busybox-1.36.1/.config")
         
     if not os.path.exists( "rootfs/.busybox_build"):
-        run_command("make -C busybox-1.36.1 oldconfig > /dev/null")
+        run_command("yes '' | make -C busybox-1.36.1 oldconfig > /dev/null")
         if not run_command("make -C busybox-1.36.1 -j20 busybox") == 0:
             exit(1)
         touch("rootfs/.busybox_build")
@@ -1035,9 +993,13 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         touch("rootfs/.busybox_installed")
 
 
-    #if rebuild_rootfs:
-    if not os.path.exists( "rootfs/init"):
-        run_command("( cd rootfs ; ln -s /sbin/init init )")
+    # The C test runner is init: as PID 1 it does what busybox init and
+    # run_tests.sh did, so a test run execs nothing but the tests -- on noMMU
+    # every busybox exec costs a 2 MB block.  Replaced on every build, an
+    # older rootfs has /init -> /sbin/init.
+    if os.path.lexists( "rootfs/init"):
+        os.remove( "rootfs/init" )
+    os.symlink( "/usr/lib/uclibc-ng-test/test/uclibcng-testrunner", "rootfs/init" )
     
     if not os.path.exists( "rootfs/lib32"):
         run_command("( cd rootfs ; ln -s lib lib32 )")

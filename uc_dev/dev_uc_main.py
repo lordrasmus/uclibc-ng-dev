@@ -48,7 +48,7 @@ def dev_uc_main():
                         help='-q: boot this kernel image instead of the dev-pack one (default: the dev-pack kernel.img is restored before every run)')
     parser.add_argument( '--all_tests', action='store_true',  help='do not auto disable tests')
     parser.add_argument( '--test_list',  help='A comma-separated list of tests')
-    parser.add_argument( '--shell', action='store_true', help='-q: keep qemu running for an interactive login after the tests (default: -q terminates qemu once it sees the tests_end marker)')
+    parser.add_argument( '--shell', action='store_true', help='-q: keep qemu running with a shell on the console after the tests, quit it with reboot -f (default: -q terminates qemu once it sees the tests_end marker)')
     parser.add_argument( '-m', '--memory',
                         help='-q: qemu RAM size, e.g. 512 or 512M (replaces a -m in the dev pack qemu command)')
     

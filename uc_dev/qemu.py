@@ -148,7 +148,7 @@ def run_qemu_watch( cmd ):
     # run_qemu.py instead: read qemu's serial output (CONFIG_QEMU_CMD uses
     # -nographic/console=ttyS0, so it lands on stdout), echo it live, and once
     # the tests_end marker (or a kernel panic) appears, kill qemu's process
-    # group. Use --shell to skip this and keep an interactive login.
+    # group. Use --shell to skip this and keep the shell after the tests.
     line_color = "\033[38;5;166m"
     print( line_color + "run : \033[00m \033[01;32m" + cmd + "\033[00m" )
     sys.stdout.flush()
@@ -380,8 +380,9 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
         build.print_line_text("qemu memory : " + memory)
     qemu_cmd = "cd " + dev_path + "; " + qemu_prefix + machine_cmd + " -no-reboot"
     if shell:
-        # Interactive: hand qemu the terminal so the post-test login works;
-        # the user quits qemu manually (reboot in the guest, or Ctrl-A X).
+        # Interactive: hand qemu the terminal for the shell the test runner
+        # starts after the tests; reboot -f in the guest (-no-reboot makes
+        # qemu exit) or Ctrl-A X quits.
         build.run_command( qemu_cmd )
     else:
         # Default: watch the serial output and stop qemu at tests_end.
