@@ -469,17 +469,24 @@ def build_dev_pack_uclibc( uclibc_src, dev_pack ):
         # Makerules only builds S$(CRT).o for HAVE_SHARED/shared-FLAT, so gcc
         # cannot link -pie: "cannot find Scrt1.o". crt1.o already carries the
         # noMMU PIC handling, so a link to it is correct here.
+        # Relinked on every install: make install replaces crt1.o, and an
+        # old hard link would keep the previous build's file.
         for crt1 in glob.glob( dev_path + "sysroot/**/crt1.o", recursive=True ):
             scrt1 = os.path.join( os.path.dirname( crt1 ), "Scrt1.o" )
-            if not os.path.exists( scrt1 ):
-                os.link( crt1, scrt1 )
-                print("Scrt1.o: not shipped, linked to crt1.o")
+            if os.path.lexists( scrt1 ):
+                os.remove( scrt1 )
+            os.link( crt1, scrt1 )
+            print("Scrt1.o: not shipped, linked to crt1.o")
 
         # install_runtime (Makefile.in) hangs entirely in ifeq($(HAVE_SHARED),y),
         # so sysroot/lib stays empty and the rootfs has no PT_INTERP -> every
         # exec fails with ENOEXEC. Copy the loader plus its symlink chain.
+        # Copied on every install, not only into an empty sysroot/lib:
+        # otherwise a rebuild keeps the first build's loader, which on
+        # 2026-10-20 still lacked TLS after the library had gained it
+        # ("Program uses unsupported TLS data!", init dead at boot).
         loaders = glob.glob( dev_path + "uclibc-ng/lib/ld*-uClibc*.so*" )
-        if loaders and not glob.glob( dev_path + "sysroot/lib/ld*-uClibc*.so*" ):
+        if loaders:
             os.makedirs( dev_path + "sysroot/lib", exist_ok=True )
             run_command("cp -a " + dev_path + "uclibc-ng/lib/ld*-uClibc*.so* "
                         + dev_path + "sysroot/lib/")
