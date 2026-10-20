@@ -997,9 +997,14 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     # run_tests.sh did, so a test run execs nothing but the tests -- on noMMU
     # every busybox exec costs a 2 MB block.  Replaced on every build, an
     # older rootfs has /init -> /sbin/init.
-    if os.path.lexists( "rootfs/init"):
-        os.remove( "rootfs/init" )
-    os.symlink( "/usr/lib/uclibc-ng-test/test/uclibcng-testrunner", "rootfs/init" )
+    # /sbin/init too: some kernels bring their own command line with
+    # rdinit=/sbin/init (csky has it in the built-in device tree), and busybox
+    # no longer provides one.
+    os.makedirs( "rootfs/sbin", exist_ok=True )
+    for link in ( "rootfs/init", "rootfs/sbin/init" ):
+        if os.path.lexists( link ):
+            os.remove( link )
+        os.symlink( "/usr/lib/uclibc-ng-test/test/uclibcng-testrunner", link )
     
     if not os.path.exists( "rootfs/lib32"):
         run_command("( cd rootfs ; ln -s lib lib32 )")

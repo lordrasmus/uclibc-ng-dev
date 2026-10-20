@@ -186,7 +186,10 @@ def run_qemu_watch( cmd ):
                 if started and "login:" in window:
                     print( "\nqemu: login prompt before tests_end, the test runner died -> stopping qemu" )
                     break
-                if "Kernel panic - not syncing: Attempted to kill init" in window:
+                # Any panic, not only "Attempted to kill init": a kernel that
+                # finds no init panics with "VFS: Unable to mount root fs",
+                # and the silence check below took 12 minutes to notice.
+                if "Kernel panic - not syncing" in window:
                     print( "\nqemu: kernel panic -> stopping qemu" )
                     break
                 tail = window[-256:]
