@@ -161,6 +161,8 @@ def run_qemu_watch( cmd ):
     max_consecutive_timeouts = 3     # 3 x 240s fully silent -> treat as hung
     consecutive = 0
     tail = ""                        # keep a small window to catch a split marker
+    started = False
+    finished = False
     try:
         while True:
             rlist, _, _ = select.select( [proc.stdout], [], [], read_timeout )
@@ -172,8 +174,17 @@ def run_qemu_watch( cmd ):
                 sys.stdout.flush()
                 consecutive = 0
                 window = tail + data.decode( errors="replace" )
+                if "tests_start" in window:
+                    started = True
                 if "tests_end" in window:
                     print( "\nqemu: tests_end -> stopping qemu" )
+                    finished = True
+                    break
+                # The guest's getty prompts once run_tests.sh is gone.  Before
+                # tests_end that means the runner died -- the prompts keep the
+                # output going, so the silence check below never fires.
+                if started and "login:" in window:
+                    print( "\nqemu: login prompt before tests_end, the test runner died -> stopping qemu" )
                     break
                 if "Kernel panic - not syncing: Attempted to kill init" in window:
                     print( "\nqemu: kernel panic -> stopping qemu" )
@@ -196,6 +207,7 @@ def run_qemu_watch( cmd ):
             except ProcessLookupError:
                 pass
         proc.wait()
+    return finished
 
 
 PACK_DIR = ".pack/"
@@ -373,4 +385,5 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
         build.run_command( qemu_cmd )
     else:
         # Default: watch the serial output and stop qemu at tests_end.
-        run_qemu_watch( qemu_cmd )
+        return run_qemu_watch( qemu_cmd )
+    return True

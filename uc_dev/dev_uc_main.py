@@ -1,6 +1,7 @@
 
 import os
 import argparse
+import sys
 
 
 def dev_uc_main():
@@ -158,6 +159,8 @@ def dev_uc_main():
             exit(1)
 
     if args.run_qemu:
-        qemu.run_qemu( args.system_qemu, shell=args.shell, kernel=args.kernel, memory=args.memory )
+        if not qemu.run_qemu( args.system_qemu, shell=args.shell, kernel=args.kernel, memory=args.memory ):
+            # no tests_end: qemu did not start, panicked, hung or the runner died
+            sys.exit( 1 )
 
 
