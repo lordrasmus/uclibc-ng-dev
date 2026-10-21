@@ -732,14 +732,15 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         
         ret = subprocess.getstatusoutput('./uclibc-ng-test/get_disabled_tests.py uclibc-ng/.config')
         
+        # NAME=1 for a directory, DISABLED_TESTS=dir/test,... for single
+        # tests -- take the value as given, it is not always 1.
         for s in ret[1].split(" "):
-            if len( s ) < 2 : continue
-            
+            if "=" not in s : continue
+
             print( "disable test : " + s )
-            test_disable.append( s.split("=")[0] )
-        
-        for t in test_disable:
-            os.environ[t] = "1"
+            name, value = s.split("=", 1)
+            test_disable.append( name )
+            os.environ[name] = value
     #run_command("env")
     
     os.environ["CROSS_COMPILE"] = infos["CONFIG_GCC_PREFIX"]
@@ -1026,8 +1027,9 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     run_command("rm -f rootfs.img.xz")
     run_command("xz -v -k --check=crc32 rootfs.img")
     
+    # gone, not "0": the next dev pack (-a) must not inherit a test list
     for t in test_disable:
-        os.environ[t] = "0"
+        os.environ.pop( t, None )
     #run_command("env")
 
 
