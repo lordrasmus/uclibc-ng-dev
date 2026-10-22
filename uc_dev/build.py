@@ -211,6 +211,8 @@ def prepare_toolchain( dev_pack ):
 
         touch(dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed")
 
+    drop_fixincluded_libc_headers( dev_path + infos["CONFIG_TOOLCHAIN"] )
+
     os.environ["PATH"] += ":" + dev_path + infos["CONFIG_TOOLCHAIN"] + "/usr/bin"
     #print( os.environ["PATH"] )
     
@@ -221,6 +223,30 @@ def prepare_toolchain( dev_pack ):
     os.environ["TERM"] = "xterm-256color"
     
     return dev_path
+
+def drop_fixincluded_libc_headers( tc_root ):
+    # Mirrors the CI 'Drop fixincluded libc headers' step
+    # (.github/workflows/z_images_workflow.yml). When gcc is built,
+    # fixincludes copies libc headers it wants to patch into
+    # lib/gcc/<target>/<ver>/include-fixed/, which comes BEFORE the sysroot
+    # on the include path.  For uClibc-ng it always takes pthread.h (rule
+    # pthread_incomplete_struct_argument: __sigsetjmp's "__env[1]").  That
+    # copy is the pthread.h of whatever uClibc-ng the toolchain was built
+    # with, so every program sees it instead of the one we just installed:
+    # a function added to pthread.h later is "implicitly declared".  Only
+    # files carrying fixincludes' header are removed; gcc's own limits.h,
+    # syslimits.h and README stay.  Runs every time, not just on extract,
+    # so already installed toolchains are cleaned too.
+    import glob
+    for f in glob.glob( tc_root + "/usr/lib/gcc/*/*/include-fixed/**", recursive=True ):
+        if not os.path.isfile( f ):
+            continue
+        with open( f, errors="replace" ) as fh:
+            head = fh.read( 512 )
+        if "auto-edited by fixincludes" in head:
+            os.remove( f )
+            print( "dropped fixincluded libc header: " + f.split( "include-fixed/" )[1] )
+
 
 def uclibc_make( uclibc_src, dev_path ):
     return "make -C " + uclibc_src + " O=" + dev_path + "uclibc-ng"
