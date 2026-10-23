@@ -185,32 +185,9 @@ def prepare_toolchain( dev_pack ):
         print_line_text("extract toolchain " + infos["CONFIG_TOOLCHAIN"] )
         dev_package.write_dev_pack_file( "files/" + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz", dev_pack=dev_pack )
         run_command("tar -xaf " + dev_path + infos["CONFIG_TOOLCHAIN"] + ".tar.xz -C " + dev_path )
-
-        # Mirrors the CI 'Isolate toolchain elf2flt.ld' step
-        # (.github/workflows/z_build_workflow.yml): ld-elf2flt looks up
-        # elf2flt.ld via <ld-binary>/../lib/elf2flt.ld which resolves to
-        # <toolchain>/usr/<target>/lib/elf2flt.ld. Older packers shipped
-        # that path as a dangling symlink, newer ones point it at
-        # sysroot/usr/lib which exposes the toolchain's pre-built libc.so
-        # ldscript and collides with the freshly built uClibc-ng. Replace
-        # the symlink with a real directory containing only elf2flt.ld.
-        import glob, shutil
-        tc_root = dev_path + infos["CONFIG_TOOLCHAIN"]
-        sysroot_script = tc_root + "/sysroot/usr/lib/elf2flt.ld"
-        for L in glob.glob(tc_root + "/usr/*-*linux-uclibc*/lib"):
-            if os.path.islink(L):
-                os.remove(L)
-                os.makedirs(L)
-                if os.path.isfile(sysroot_script):
-                    shutil.copy(sysroot_script, L + "/elf2flt.ld")
-                # re-expose ldscripts (ld needs them on arches whose binutils
-                # doesn't embed them, e.g. nds32; no libc in there)
-                if os.path.isdir(tc_root + "/sysroot/usr/lib/ldscripts"):
-                    os.symlink("../../../sysroot/usr/lib/ldscripts", L + "/ldscripts")
-                print("isolated: " + L + " (elf2flt.ld + ldscripts)")
-
         touch(dev_path + infos["CONFIG_TOOLCHAIN"]+"/.installed")
 
+    isolate_toolchain_lib( dev_path + infos["CONFIG_TOOLCHAIN"] )
     drop_fixincluded_libc_headers( dev_path + infos["CONFIG_TOOLCHAIN"] )
 
     os.environ["PATH"] += ":" + dev_path + infos["CONFIG_TOOLCHAIN"] + "/usr/bin"
@@ -223,6 +200,33 @@ def prepare_toolchain( dev_pack ):
     os.environ["TERM"] = "xterm-256color"
     
     return dev_path
+
+def isolate_toolchain_lib( tc_root ):
+    # Mirrors the CI 'Isolate toolchain elf2flt.ld' step
+    # (.github/workflows/z_build_workflow.yml): ld-elf2flt looks up
+    # elf2flt.ld via <ld-binary>/../lib/elf2flt.ld which resolves to
+    # <toolchain>/usr/<target>/lib/elf2flt.ld. Older packers shipped
+    # that path as a dangling symlink, newer ones point it at
+    # sysroot/usr/lib which exposes the toolchain's pre-built libc.a/libc.so
+    # and collides with the freshly built uClibc-ng: the linker finds the
+    # toolchain's libc first, and anything newer than it (fenv, hypotl) is
+    # "undefined".  Replace the symlink with a real directory containing
+    # only elf2flt.ld.  Runs every time, not just on extract, so toolchains
+    # installed before this step existed are isolated too.
+    import glob, shutil
+    sysroot_script = tc_root + "/sysroot/usr/lib/elf2flt.ld"
+    for L in glob.glob(tc_root + "/usr/*-*linux-uclibc*/lib"):
+        if os.path.islink(L):
+            os.remove(L)
+            os.makedirs(L)
+            if os.path.isfile(sysroot_script):
+                shutil.copy(sysroot_script, L + "/elf2flt.ld")
+            # re-expose ldscripts (ld needs them on arches whose binutils
+            # doesn't embed them, e.g. nds32; no libc in there)
+            if os.path.isdir(tc_root + "/sysroot/usr/lib/ldscripts"):
+                os.symlink("../../../sysroot/usr/lib/ldscripts", L + "/ldscripts")
+            print("isolated: " + L + " (elf2flt.ld + ldscripts)")
+
 
 def drop_fixincluded_libc_headers( tc_root ):
     # Mirrors the CI 'Drop fixincluded libc headers' step
