@@ -751,26 +751,9 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
                   "gebaut\033[00m")
 
     
-    test_disable = []
-    if no_disabled_tests == False:
-        print_line_text("detecting tests to disable ")
-        
-        if not os.path.exists( "uclibc-ng/.config" ):
-            print_line_text("copy default uclibc-ng config" )
-            run_command("mkdir -p uclibc-ng")
-            dev_package.write_dev_pack_file( "files/uclibc-ng-config", "uclibc-ng/.config", dev_pack )
-        
-        ret = subprocess.getstatusoutput('./uclibc-ng-test/get_disabled_tests.py uclibc-ng/.config')
-        
-        # NAME=1 for a directory, DISABLED_TESTS=dir/test,... for single
-        # tests -- take the value as given, it is not always 1.
-        for s in ret[1].split(" "):
-            if "=" not in s : continue
-
-            print( "disable test : " + s )
-            name, value = s.split("=", 1)
-            test_disable.append( name )
-            os.environ[name] = value
+    # What does not run, the test suite decides itself: test/Makefile calls
+    # get_disabled_tests.py with the CC and CFLAGS below and asks the compiler
+    # which libc and which options it has.  --all_tests switches that off.
     #run_command("env")
     
     os.environ["CROSS_COMPILE"] = infos["CONFIG_GCC_PREFIX"]
@@ -819,6 +802,8 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     
     slot = embeds_rootfs( infos )
     mk_flags = " O2_TWINS=0" if slot else ""
+    if no_disabled_tests:
+        mk_flags += " ALL_TESTS=1"
     testsuite_ret = run_command("make -C uclibc-ng-test -j20" + mk_flags)
     run_command("make -C uclibc-ng-test install DESTDIR=../rootfs" + mk_flags + " > /dev/null  2>&1")
 
@@ -1057,9 +1042,6 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     run_command("rm -f rootfs.img.xz")
     run_command("xz -v -k --check=crc32 rootfs.img")
     
-    # gone, not "0": the next dev pack (-a) must not inherit a test list
-    for t in test_disable:
-        os.environ.pop( t, None )
     #run_command("env")
 
 
