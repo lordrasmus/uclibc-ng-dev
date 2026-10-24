@@ -21,20 +21,16 @@ def dev_uc_main():
     parser.add_argument('-d', '--download', nargs='?', const=True, default=False,
                         help='Download Dev Package. Bare -d is interactive; '
                              '-d NAME (substring) or -d all downloads non-interactively')
-    parser.add_argument('-s', '--select', nargs='?', const=True, default=False,
-                        help='Select current dev package. Bare -s is interactive; '
-                             '-s NAME selects by (substring) match non-interactively')
     parser.add_argument('-p', '--pack',
-                        help='use this dev package for THIS run only, by (substring) match. '
-                             'Unlike -s it does not change the stored selection, so a second '
-                             'session can work on another arch at the same time. '
-                             'UC_DEV_PACK does the same for a whole shell; -p wins.')
+                        help='dev package for this run, by (substring) match. Nothing is '
+                             'stored, so several runs on different archs can go at the same '
+                             'time. UC_DEV_PACK does the same for a whole shell; -p wins.')
     parser.add_argument('--clean', action='store_true', help='delete all dev folders in workspace')
     
     parser.add_argument('-a', '--all_archs', action='store_true', help='build for all downloaded archs')
     parser.add_argument( '-w', '--work_dir',  help='path where builds are done and files are cached')
-    parser.add_argument( '--uclibc_src',  help='path to uclibc')
-    parser.add_argument( '--test_src',    help='path to a uclibc-ng-test checkout; it is remembered like --uclibc_src and used instead of the clone in the dev pack')
+    parser.add_argument( '--uclibc_src',  help='path to the uclibc-ng tree for this run (or UC_UCLIBC_SRC)')
+    parser.add_argument( '--test_src',    help='path to a uclibc-ng-test checkout for this run, used instead of the clone in the dev pack (or UC_TEST_SRC)')
     
     
     parser.add_argument('-c', '--config_uclibc', action='store_true', help='configure uclibc-ng')
@@ -79,9 +75,6 @@ def dev_uc_main():
         dev_package.download_dev_package( None if args.download is True else args.download )
         exit(0)
 
-
-    if args.select:
-        options.select_dev_package( None if args.select is True else args.select )
 
     if args.uclibc_src:
         options.set_uclibc_repo( args.uclibc_src )
@@ -138,7 +131,7 @@ def dev_uc_main():
     # der Target-Choice, der kconfig interaktiv nachfragen liess.
     if args.config_uclibc:
         if options.get_uclibc_repo() == "":
-            print("set uclibc-ng src with --uclibc_src")
+            print("set uclibc-ng src with --uclibc_src or UC_UCLIBC_SRC")
             exit(1)
 
         if not build.config_uclibc( options.get_uclibc_repo(), args.all_archs ):
@@ -147,7 +140,7 @@ def dev_uc_main():
     if args.build_uclibc:
 
         if options.get_uclibc_repo() == "":
-            print("set uclibc-ng src with --uclibc_src")
+            print("set uclibc-ng src with --uclibc_src or UC_UCLIBC_SRC")
             exit(1)
 
         if not build.build_uclibc( options.get_uclibc_repo(), args.all_archs ):

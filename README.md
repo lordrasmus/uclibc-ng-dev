@@ -16,9 +16,9 @@ There is an option to update it using -u or --update.
 
 All files are stored in a designated working directory, which can be configured using uc_devel --work_dir. The builds are executed within this working directory, and each development package is stored in a separate folder.
 
-To specify the uclibc-ng source tree, you can use uc_devel --uclibc_src. Before the build process begins, it is synchronized into the working directory using rsync.
+The uclibc-ng source tree is given with uc_devel --uclibc_src (or UC_UCLIBC_SRC) on every run; it is built out of tree in the working directory.
 
-Dev Packages can be downloaded by using uc_devel -d and selected with uc_devel -s.
+Dev Packages are downloaded with uc_devel -d and chosen per run with -p NAME (or UC_DEV_PACK). Nothing about a run is stored, so runs on several archs can go at the same time.
 
 
 

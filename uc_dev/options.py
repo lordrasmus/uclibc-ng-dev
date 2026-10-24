@@ -6,7 +6,7 @@ uc_setts = os.path.expanduser('~')+"/.uc_dev/settings.json"
 
 def load_settings():
     if not os.path.exists( uc_setts ):
-            setts = { "dev_package": "" }
+            setts = {}
     else:
         try:
             with open(uc_setts, 'r') as json_file:
@@ -26,10 +26,14 @@ def load_settings():
     return setts
     
 def save_settings( setts ):
+    # Atomar: erst eine eigene temporaere Datei, dann rename.  open(..., 'w')
+    # kuerzt die Datei sofort, und ein zweiter uc_devel, der in diesem Moment
+    # liest, bekam eine leere Datei ("Error decoding the JSON file").
+    tmp = uc_setts + ".{0}.tmp".format( os.getpid() )
     try:
-    # Writing data to the JSON file
-        with open(uc_setts, 'w') as json_file:
+        with open(tmp, 'w') as json_file:
             json.dump(setts, json_file, indent=2)
+        os.replace( tmp, uc_setts )
     except Exception as e:
         print(f"Error writing to the JSON file: {e}")
 
@@ -80,64 +84,6 @@ def get_dev_pack_dir():
     return get_option( "work_dir" )+ "/cache/dev_packs/"    
     
 
-def select_dev_package( name=None ):
-
-
-    setts = load_settings()
-
-    files = sorted( os.listdir(get_dev_pack_dir()) )
-
-    # Filtere nur Dateien (keine Verzeichnisse) und zeige den vollen Pfad an
-    file_list = [file for file in files if os.path.isfile(os.path.join(get_dev_pack_dir(), file)) and not file.endswith(".dl") ]
-
-    # non-interaktiv: per (eindeutigem) NAME-Substring waehlen
-    if name is not None:
-        matches = [ f for f in file_list if name in f[11:-4] ]
-        if len( matches ) != 1:
-            print("select '{0}' matched {1} packages: {2}".format(
-                name, len(matches), [ m[11:-4] for m in matches ] ) )
-            exit(1)
-        setts["dev_package"] = matches[0][11:-4]
-        save_settings( setts )
-        print("selected \033[01;32m{0}\033[00m".format( matches[0][11:-4] ) )
-        return
-
-    #print( file_list )
-
-    print("")
-    print("downloaded dev packages : ")
-    print("")
-
-    for i, file_info in enumerate(file_list, start=1):
-        
-        selected=""
-        if setts["dev_package"] == file_info:
-            selected="\033[01;32mselected\033[00m"
-        
-        file_display = file_info[11:-4]
-        tmp = file_display.split("-")
-        tmp[0] = "\033[01;33m" + tmp[0] + "\033[00m"
-        file_display = "-".join(tmp)
-        
-        print("{0:2d}) {1:<30} {2} ".format( i, file_display, selected ) )
-
-    # Benutzer nach Auswahl fragen
-    try:
-        selection = int(input("\nPlease choose a file (1-{0}): ".format(len(file_list))))
-        selected_file = file_list[selection - 1]
-        
-        print("\nYou have selected \033[01;32m {0}\033[00m. ".format(selected_file[11:-4]))
-        
-    except (ValueError, IndexError):
-        print("Invalid selection. Please enter a number between 1 and {0}.".format(len(file_list)))
-    except Exception as e:
-        print(f"Error: {e}")
-
-
-    setts["dev_package"] = selected_file[11:-4]
-
-    save_settings( setts )
-
 def get_dev_pack_list():
     
      #setts = load_settings()
@@ -164,8 +110,8 @@ def get_dev_pack_list():
 # Pack-Auswahl nur fuer diesen Aufruf, aus -p/--pack oder UC_DEV_PACK.  Steht
 # bewusst NICHT in settings.json: wer gleichzeitig an zwei Arches arbeitet,
 # stellt sonst der anderen Sitzung staendig die globale Auswahl um.  Alles
-# andere ist ohnehin pro Pack getrennt -- die dev_<name>/-Ordner, der Cache --,
-# nur dieser eine Wert war gemeinsam.
+# andere ist ohnehin pro Pack getrennt -- die dev_<name>/-Ordner, der Cache.
+# Eine gespeicherte Auswahl (-s) gibt es deshalb nicht mehr.
 dev_package_override = None
 
 
@@ -189,13 +135,10 @@ def get_dev_package_name( ):
     if dev_package_override is not None:
         return dev_package_override
 
-    setts = load_settings()
-
-    if not "dev_package" in setts or setts["dev_package"] == "":
-        print("no dev package selected. run uc_devel -s")
-        exit(1)
-
-    return setts["dev_package"]
+    print("no dev package given: use -p NAME or set UC_DEV_PACK. Downloaded:")
+    for p in get_dev_pack_list():
+        print("  " + p)
+    exit(1)
 
 def get_dev_package_tar( dev_pack ):
     
@@ -204,37 +147,28 @@ def get_dev_package_tar( dev_pack ):
     return ret
     
 
+# Quellbaeume nur fuer diesen Aufruf, aus --uclibc_src/--test_src oder
+# UC_UCLIBC_SRC/UC_TEST_SRC; aus demselben Grund wie das Pack nicht in
+# settings.json.
+uclibc_repo = os.environ.get( "UC_UCLIBC_SRC", "" )
+test_repo = os.environ.get( "UC_TEST_SRC", "" )
+
+
 def set_uclibc_repo( path ):
-    
-    setts = load_settings()
-    
-    setts["uclibc-ng_repo"] = os.path.abspath( path )
-    
-    save_settings( setts )
+
+    global uclibc_repo
+    uclibc_repo = os.path.abspath( path )
 
 def get_uclibc_repo( ):
-    
-    setts = load_settings()
-    
-    if "uclibc-ng_repo" in setts:
-        return setts["uclibc-ng_repo"]
-        
-    return ""
+
+    return uclibc_repo
 
 
 def set_test_repo( path ):
-    
-    setts = load_settings()
-    
-    setts["uclibc-ng-test_repo"] = os.path.abspath( path )
-    
-    save_settings( setts )
+
+    global test_repo
+    test_repo = os.path.abspath( path )
 
 def get_test_repo( ):
-    
-    setts = load_settings()
-    
-    if "uclibc-ng-test_repo" in setts:
-        return setts["uclibc-ng-test_repo"]
-        
-    return ""
+
+    return test_repo
