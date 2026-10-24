@@ -43,7 +43,7 @@ def check_settings( ):
     
     error = False
     
-    if not "work_dir" in setts:
+    if not "work_dir" in setts and not os.environ.get( "UC_WORK_DIR" ):
         print("Work dir not set. run uc_devel --work_dir")
         error = True
         
@@ -62,9 +62,14 @@ def set_options ( name, value ):
     save_settings( setts )
     
 def get_option( name ):
-    
+
+    # UC_WORK_DIR gilt nur fuer diesen Aufruf, ohne settings.json zu aendern:
+    # -w speichert, und eine andere Sitzung landete dann in einem fremden work_dir.
+    if name == "work_dir" and os.environ.get( "UC_WORK_DIR" ):
+        return os.path.abspath( os.environ["UC_WORK_DIR"] )
+
     setts = load_settings()
-    
+
     return setts[name]
     
 

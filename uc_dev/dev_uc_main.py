@@ -28,7 +28,7 @@ def dev_uc_main():
     parser.add_argument('--clean', action='store_true', help='delete all dev folders in workspace')
     
     parser.add_argument('-a', '--all_archs', action='store_true', help='build for all downloaded archs')
-    parser.add_argument( '-w', '--work_dir',  help='path where builds are done and files are cached')
+    parser.add_argument( '-w', '--work_dir',  help='path where builds are done and files are cached; stored. UC_WORK_DIR sets it for one run without storing it')
     parser.add_argument( '--uclibc_src',  help='path to the uclibc-ng tree for this run (or UC_UCLIBC_SRC)')
     parser.add_argument( '--test_src',    help='path to a uclibc-ng-test checkout for this run, used instead of the clone in the dev pack (or UC_TEST_SRC)')
     
