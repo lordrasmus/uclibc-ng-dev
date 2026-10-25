@@ -291,6 +291,11 @@ def migrate_copied_tree( build_dir ):
     if not os.path.exists( build_dir + "/Makefile" ):
         return
     print_line_text("remove copied uclibc-ng source tree (now built with O=)")
+    reset_build_dir( build_dir )
+
+
+def reset_build_dir( build_dir ):
+    # Leert das O=-Verzeichnis bis auf die .config.
     config = None
     if os.path.exists( build_dir + "/.config" ):
         with open( build_dir + "/.config" ) as f:
@@ -300,6 +305,37 @@ def migrate_copied_tree( build_dir ):
     if config is not None:
         with open( build_dir + "/.config", "w" ) as f:
             f.write( config )
+
+
+def check_source_tree( uclibc_src, build_dir ):
+    # Das O=-Verzeichnis gehoert zu genau einem Quellbaum: die Header dort sind
+    # Symlinks in diesen Baum (include/bits/shm.h -> ../../<baum>/libc/sysdeps/
+    # linux/tile/bits/shm.h), und Objekte und .dep-Dateien tragen seine Pfade.
+    # Kam --uclibc_src aus einem anderen Baum, blieben die Links auf dem alten
+    # stehen, und Arch-Header wurden still von dort genommen. Bei Wechsel also
+    # neu anfangen.
+    marker = build_dir + "/.uc_dev_src"
+    src = os.path.realpath( uclibc_src )
+    old = None
+    if os.path.exists( marker ):
+        with open( marker ) as f:
+            old = f.read().strip()
+    elif os.path.exists( build_dir + "/include" ):
+        old = "?"
+    if old is not None and old != src:
+        print_line_text("uclibc-ng source changed (" + old + " -> " + src
+                        + "), clean build dir")
+        reset_build_dir( build_dir )
+    with open( marker, "w" ) as f:
+        f.write( src + "\n" )
+
+    # Im selben Baum: eine geloeschte Arch-Datei laesst ihren Symlink tot
+    # zurueck, und make legt den generischen nicht an seiner Stelle an.
+    for root, dirs, files in os.walk( build_dir ):
+        for name in dirs + files:
+            path = os.path.join( root, name )
+            if os.path.islink( path ) and not os.path.exists( path ):
+                os.remove( path )
 
 
 def prepare_uclibc( uclibc_src, dev_pack ):
@@ -316,6 +352,7 @@ def prepare_uclibc( uclibc_src, dev_pack ):
         return None
     migrate_copied_tree( dev_path + "uclibc-ng" )
     os.makedirs( dev_path + "uclibc-ng", exist_ok=True )
+    check_source_tree( uclibc_src, dev_path + "uclibc-ng" )
 
 
     if not os.path.exists( dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] +"/.installed" ):
