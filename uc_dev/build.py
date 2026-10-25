@@ -215,7 +215,7 @@ def isolate_toolchain_lib( tc_root ):
     # installed before this step existed are isolated too.
     import glob, shutil
     sysroot_script = tc_root + "/sysroot/usr/lib/elf2flt.ld"
-    for L in glob.glob(tc_root + "/usr/*-*linux-uclibc*/lib"):
+    for L in glob.glob(tc_root + "/usr/*-*linux*/lib"):
         if os.path.islink(L):
             os.remove(L)
             os.makedirs(L)
