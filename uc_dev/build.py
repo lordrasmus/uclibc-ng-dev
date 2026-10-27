@@ -61,6 +61,9 @@ def embeds_rootfs( infos ):
     # These kernels carry the rootfs in a fixed slot (the cpio hack): ~17 MB
     # for xtensa/kvx/csky/arc, 24 MB in the ColdFire ELF image. Same test as
     # z_images_workflow.yml, which skips the -O2 twins and strips there.
+    # A target that boots from a disk image has no slot to fit.
+    if "rootfs.ext2" in infos.get("CONFIG_QEMU_CMD", ""):
+        return False
     if infos.get("CONFIG_KERNEL_ARCH") in ( "xtensa", "kvx", "csky", "arc" ):
         return True
     return "mcf5208" in infos.get("CONFIG_QEMU_CMD", "") and infos.get("UCLIBC_FORMAT_ELF") == "y"
