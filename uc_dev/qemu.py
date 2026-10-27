@@ -340,6 +340,10 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
         with open( kernel, "rb" ) as src, open( dev_path + "kernel.img", "wb" ) as dst:
             dst.write( src.read() )
     else:
+        # Older packs carry no kernel.img.
+        if dev_package.get_dev_file_content( "files/kernel.img", dev_pack, quiet=True ) is None:
+            print( "dev pack " + dev_pack + " has no kernel.img; give one with --kernel <path>" )
+            exit(1)
         dev_package.write_dev_pack_file("files/kernel.img", dev_path + "/kernel.img", dev_pack )
         build.print_line_text("kernel : dev pack  (" + file_stamp( options.get_dev_package_tar( dev_pack ) ) + ")")
     # Manche qemu-Maschinen haben ueberhaupt keine initrd-Unterstuetzung

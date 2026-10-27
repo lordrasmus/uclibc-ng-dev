@@ -273,6 +273,9 @@ def write_dev_pack_file( tar_name, out_name, dev_pack ):
     
     #print( "get : " + tar_name )
     data = get_dev_file_content( tar_name, dev_pack )
-    
+    if data is None:
+        print( "dev pack " + dev_pack + " has no " + tar_name )
+        exit(1)
+
     with open( out_name, "wb" ) as f:
         f.write( data )
