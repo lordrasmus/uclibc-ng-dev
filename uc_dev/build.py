@@ -1081,7 +1081,15 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     #run_command("cp rootfs.img rootfs.cpio")
     run_command("rm -f rootfs.img.xz")
     run_command("xz -v -k --check=crc32 rootfs.img")
-    
+
+    # Targets that boot from a disk get it built here as in
+    # z_images_workflow.yml; otherwise qemu runs a stale image.
+    if "rootfs.ext2" in infos.get("CONFIG_QEMU_CMD", ""):
+        run_command("rm -f rootfs.ext2")
+        run_command("SZ=$(du -sm --apparent-size rootfs | cut -f1); "
+                    "PATH=$PATH:/sbin:/usr/sbin mke2fs -q -t ext2 -b 1024 -d rootfs "
+                    "rootfs.ext2 $((SZ * 2 + 32))M")
+
     #run_command("env")
 
 
