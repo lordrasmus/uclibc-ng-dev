@@ -826,10 +826,11 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
     # A uClibc-ng built without HAVE_SHARED leaves no libc.so behind, but the
     # dev pack's sysroot still ships a shared libgcc; without -static the link
     # picks that up and dies on an undefined dl_iterate_phdr. -static is also
-    # simply what a static libc wants. Not for FLAT or noMMU ELF: both need
-    # their own link mode and -static would override the -pie.
+    # simply what a static libc wants. Not for noMMU ELF, where -static would
+    # override the -pie. FLAT is static too: without -static the unwinder
+    # comes out of the second -lgcc after -lc and its malloc stays undefined.
     static = ""
-    if not flat and not pie_ld and not config_has( "HAVE_SHARED=y" ):
+    if flat or (not pie_ld and not config_has( "HAVE_SHARED=y" )):
         static = " -static"
 
     cf = cf_flags( infos )
