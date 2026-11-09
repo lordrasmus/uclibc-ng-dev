@@ -291,6 +291,51 @@ def set_qemu_console( cmd ):
     return cmd.replace( "-serial vc", "-serial null", 1 ) + " -serial mon:stdio"
 
 
+QEMU_BIN_URL = "https://raw.githubusercontent.com/lordrasmus/uclibc-ng-qemu-imgs/main/qemu-bin/"
+
+
+def fetch_qemu_bin( binary, qemu_inst ):
+    """Put qemu-bin/<binary>.xz into qemu_inst/bin, downloading it again
+    only when GitHub's ETag for it has changed."""
+    import lzma
+    import urllib.error
+    import urllib.request
+
+    cache = options.get_download_dir() + "/qemu-bin/"
+    os.makedirs( cache, exist_ok=True )
+    xz = cache + binary + ".xz"
+    etag_file = xz + ".etag"
+    target = qemu_inst + "/bin/" + binary
+
+    req = urllib.request.Request( QEMU_BIN_URL + binary + ".xz" )
+    if os.path.exists( xz ) and os.path.exists( etag_file ):
+        with open( etag_file ) as f:
+            req.add_header( "If-None-Match", f.read().strip() )
+    try:
+        with urllib.request.urlopen( req, timeout=120 ) as r:
+            build.print_line_text( "download " + binary + " (qemu-bin)" )
+            with open( xz + ".dl", "wb" ) as f:
+                f.write( r.read() )
+            os.rename( xz + ".dl", xz )
+            with open( etag_file, "w" ) as f:
+                f.write( r.headers.get( "ETag", "" ) )
+    except urllib.error.HTTPError as e:
+        if e.code != 304:
+            print( "qemu-bin/" + binary + ".xz: HTTP " + str( e.code ) )
+            exit( 1 )
+    except urllib.error.URLError as e:
+        # offline: keep what is cached
+        if not os.path.exists( xz ):
+            print( "qemu-bin/" + binary + ".xz: " + str( e.reason ) )
+            exit( 1 )
+
+    if not os.path.exists( target ) or os.path.getmtime( target ) < os.path.getmtime( xz ):
+        with lzma.open( xz ) as src, open( target + ".tmp", "wb" ) as dst:
+            dst.write( src.read() )
+        os.chmod( target + ".tmp", 0o755 )
+        os.rename( target + ".tmp", target )
+
+
 def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
 
     dev_pack = options.get_dev_package_name()
@@ -313,6 +358,11 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
             build.print_line_text("extract qemu")
             build.run_command("tar -xaf " + options.get_download_dir() + "/qemu-inst.tar.xz -C " + options.get_work_dir())
             build.touch( qemu_inst + "/.installed")
+
+        # The binary itself comes from qemu-bin/, as in the CI
+        # (z_qemu_test_run.yml); qemu-inst.tar.xz only still supplies the
+        # firmware under share/qemu, which the binary finds relative to bin/.
+        fetch_qemu_bin( infos["CONFIG_QEMU_CMD"].split()[0], qemu_inst )
 
 
     # Must match build.py's prepare_uclibc/prepare_toolchain, which build
