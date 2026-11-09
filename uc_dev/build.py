@@ -78,6 +78,17 @@ def config_has( needle, path="uclibc-ng/.config" ):
         return False
 
 
+def h8300_flags():
+    # h8300: gcc defaults to the plain H8/300 with 16-bit int, for which the
+    # toolchain has neither libc.a nor libgcc.a ("skipping incompatible").
+    # Same -mh/-ms -mint32 as Rules.mak and the CI (z_images_workflow.yml).
+    if config_has( "CONFIG_H8300H=y" ):
+        return "-mh -mint32 "
+    if config_has( "CONFIG_H8S=y" ):
+        return "-ms -mint32 "
+    return ""
+
+
 def is_nommu_elf( infos ):
     # noMMU + UCLIBC_FORMAT_ELF: the kernel loads these via BINFMT_ELF_FDPIC,
     # which needs PIE -- a plain ELF gives ENOEXEC ("error -8") on exec.
@@ -809,7 +820,7 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         # -s65536: elf2flt defaults to a 4 KB stack, and a bFLT stack cannot
         # grow -- it is a fixed slice of the one mapping that also holds text,
         # data and bss. test/unistd/clone.c alone declares 24 KB of locals.
-        flat = " -Wl,-elf2flt=-r -Wl,-elf2flt=-s65536"
+        flat = " " + h8300_flags() + "-Wl,-elf2flt=-r -Wl,-elf2flt=-s65536"
         if infos.get("UCLIBC_ARCH","").startswith("riscv"):
             # -fPIC so GOT slots get relocs elf2flt can harvest; --no-relax
             # because ld turns pc relative sequences into absolute ones once
@@ -1021,7 +1032,7 @@ def build_dev_pack_rootfs( dev_pack, test_list, rebuild_rootfs=False, no_disable
         # rv32 the -fPIC needs to reach every compilation unit so GOT
         # slots end up R_RISCV_RELATIVE — otherwise some objects compile
         # absolute and binfmt_flat can't relocate them, returning ENOEXEC.
-        flat = "-Wl,-elf2flt=-r"
+        flat = h8300_flags() + "-Wl,-elf2flt=-r"
         if infos.get("UCLIBC_ARCH","").startswith("riscv"):
             flat = "-fPIC " + flat
         replace_line('CONFIG_EXTRA_CFLAGS=""' , 'CONFIG_EXTRA_CFLAGS="' + flat + '"' , "busybox-1.36.1/.config")
