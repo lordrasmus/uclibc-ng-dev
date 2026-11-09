@@ -294,9 +294,9 @@ def set_qemu_console( cmd ):
 QEMU_BIN_URL = "https://raw.githubusercontent.com/lordrasmus/uclibc-ng-qemu-imgs/main/qemu-bin/"
 
 
-def fetch_qemu_bin( binary, qemu_inst ):
-    """Put qemu-bin/<binary>.xz into qemu_inst/bin, downloading it again
-    only when GitHub's ETag for it has changed."""
+def fetch_qemu_bin( binary, qemu_dir ):
+    """Put qemu-bin/<binary>.xz into qemu_dir, downloading it again only
+    when GitHub's ETag for it has changed."""
     import lzma
     import urllib.error
     import urllib.request
@@ -305,7 +305,7 @@ def fetch_qemu_bin( binary, qemu_inst ):
     os.makedirs( cache, exist_ok=True )
     xz = cache + binary + ".xz"
     etag_file = xz + ".etag"
-    target = qemu_inst + "/bin/" + binary
+    target = qemu_dir + "/" + binary
 
     req = urllib.request.Request( QEMU_BIN_URL + binary + ".xz" )
     if os.path.exists( xz ) and os.path.exists( etag_file ):
@@ -345,24 +345,14 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
 
     #pprint( infos )
 
-    # mitgeliefertes qemu nur holen/entpacken, wenn nicht das System-qemu genutzt wird
+    # The qemu comes from qemu-bin/, as in the CI (z_qemu_test_run.yml):
+    # one static binary with its firmware built in.  Into the work dir, not
+    # the cwd: the command below runs it as ../qemu-bin from the dev pack
+    # directory.
     if not use_system_qemu:
-        if not os.path.exists( options.get_download_dir() + "/qemu-inst.tar.xz"):
-            build.print_line_text("download qemu")
-            dev_package.download_with_progress("https://raw.githubusercontent.com/lordrasmus/uclibc-ng-qemu-imgs/main/qemu-inst.tar.xz", options.get_download_dir() + "/qemu-inst.tar.xz")
-
-        # Into the work dir, not the cwd: the command below runs it as
-        # ../qemu-inst from the dev pack directory.
-        qemu_inst = options.get_work_dir() + "qemu-inst"
-        if not os.path.exists( qemu_inst + "/.installed"):
-            build.print_line_text("extract qemu")
-            build.run_command("tar -xaf " + options.get_download_dir() + "/qemu-inst.tar.xz -C " + options.get_work_dir())
-            build.touch( qemu_inst + "/.installed")
-
-        # The binary itself comes from qemu-bin/, as in the CI
-        # (z_qemu_test_run.yml); qemu-inst.tar.xz only still supplies the
-        # firmware under share/qemu, which the binary finds relative to bin/.
-        fetch_qemu_bin( infos["CONFIG_QEMU_CMD"].split()[0], qemu_inst )
+        qemu_dir = options.get_work_dir() + "qemu-bin"
+        os.makedirs( qemu_dir, exist_ok=True )
+        fetch_qemu_bin( infos["CONFIG_QEMU_CMD"].split()[0], qemu_dir )
 
 
     # Must match build.py's prepare_uclibc/prepare_toolchain, which build
@@ -406,8 +396,8 @@ def run_qemu( use_system_qemu=False, shell=False, kernel=None, memory=None ):
 	
     
 	
-    # System-qemu (aus PATH) oder mitgeliefertes qemu-inst
-    qemu_prefix = "" if use_system_qemu else "../qemu-inst/bin/"
+    # System-qemu (aus PATH) oder das aus qemu-bin/
+    qemu_prefix = "" if use_system_qemu else "../qemu-bin/"
     # Welche Variante, entscheidet das Pack: sein CONFIG_QEMU_CMD nennt das
     # Image, das zu seinem Kernel passt.  Der riscv32-6.18-noMMU-Kernel etwa ist
     # ohne CONFIG_RD_XZ gebaut und panict mit rootfs.img.xz ("Initramfs unpacking

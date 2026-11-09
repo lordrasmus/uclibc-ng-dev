@@ -39,7 +39,7 @@ def dev_uc_main():
     
     parser.add_argument('-q', '--run_qemu', action='store_true', help='run qemu')
     parser.add_argument('--system-qemu', action='store_true',
-                        help='use the system qemu-system-* (from PATH) instead of the bundled qemu-inst')
+                        help='use the system qemu-system-* (from PATH) instead of the one from qemu-bin/')
     parser.add_argument('--kernel',
                         help='-q: boot this kernel image instead of the dev-pack one (default: the dev-pack kernel.img is restored before every run)')
     parser.add_argument( '--all_tests', action='store_true',  help='do not auto disable tests')
