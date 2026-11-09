@@ -386,9 +386,16 @@ def prepare_uclibc( uclibc_src, dev_pack ):
     
     if not os.path.exists( dev_path + "sysroot/.kernel_header_installed"):
         print_line_text( "install kernel_header" )
-        cmd = "make -C " + dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + "/ INSTALL_HDR_PATH=" + dev_path + "/sysroot/usr/ headers_install 2>&1 | tee -a build.log"
+        # -std=gnu11: old kernels (lm32 3.5) have host tools that use
+        # constexpr/bool as names, which gcc >= 15 (C23) rejects.
+        cmd = "make -C " + dev_path + "linux-" + infos["CONFIG_KERNEL_VERS"] + "/ INSTALL_HDR_PATH=" + dev_path + "/sysroot/usr/ HOSTCFLAGS=-std=gnu11 headers_install 2>&1 | tee -a build.log"
         run_command( cmd )
-        
+
+        # tee hides make's status: check the result instead, or a failed
+        # install only shows up later as a broken uClibc-ng build.
+        if not os.path.exists( dev_path + "sysroot/usr/include/linux/version.h" ):
+            print_error( "kernel headers_install failed, see build.log" )
+            sys.exit( 1 )
         touch( dev_path + "sysroot/.kernel_header_installed" )
     
     
