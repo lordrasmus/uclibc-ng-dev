@@ -126,6 +126,11 @@ def set_dev_package_override( name ):
     global dev_package_override
 
     matches = [ p for p in get_dev_pack_list() if name in p ]
+    # Ein genau passender Name gewinnt: sonst waere jeder Pack, dessen
+    # Name Anfang eines laengeren ist (…-shared-elf gegen …-shared-elf-sfp),
+    # gar nicht mehr waehlbar.
+    if len( matches ) > 1 and name in matches:
+        matches = [ name ]
     if len( matches ) != 1:
         print("pack '{0}' matched {1} packages: {2}".format(
             name, len(matches), matches ) )
